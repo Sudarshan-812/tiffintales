@@ -1,58 +1,64 @@
-import { View, Text, ActivityIndicator, TouchableOpacity } from 'react-native';
-import { useEffect, useState } from 'react';
+import { View, Text, ActivityIndicator, TouchableOpacity, FlatList, RefreshControl } from 'react-native';
+import { useEffect, useState, useCallback } from 'react'; // Added useCallback
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'expo-router';
+import DishCard from '../../components/DishCard'; // Import the card
 
 export default function Dashboard() {
   const router = useRouter();
   const [profile, setProfile] = useState(null);
+  const [dishes, setDishes] = useState([]); // State for food
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false); // Pull to refresh
 
   useEffect(() => {
-    fetchProfile();
+    fetchData();
   }, []);
 
-  async function fetchProfile() {
-    // 1. Get the current user
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
-      // If no user, kick them back to login
-      router.replace('/login'); 
-      return;
-    }
-
-    // 2. Fetch their role from the 'profiles' table
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
-
-    if (error) console.error("Error fetching profile:", error);
-    setProfile(data);
-    setLoading(false);
-  }
-
-  // Debug Version of Sign Out
-  async function handleSignOut() {
-    console.log("🔴 Sign Out Button Clicked!");
-    
+  async function fetchData() {
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error("❌ Supabase Error:", error.message);
-        alert("Error signing out: " + error.message);
-      } else {
-        console.log("✅ Signed out from Supabase. Navigating to Login...");
+      // 1. Get User
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
         router.replace('/login'); 
+        return;
       }
-    } catch (err) {
-      console.error("❌ Crash Error:", err);
+
+      // 2. Get Profile
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      setProfile(profileData);
+
+      // 3. Get Dishes based on Role
+      let query = supabase.from('menu_items').select('*').order('created_at', { ascending: false });
+      
+      if (profileData.role === 'chef') {
+        // If Chef, only show MY dishes
+        query = query.eq('chef_id', user.id);
+      }
+      
+      const { data: dishData, error: dishError } = await query;
+      
+      if (dishError) throw dishError;
+      setDishes(dishData);
+
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   }
 
-  // LOADING STATE CHECK
+  // Pull to Refresh Logic
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchData();
+  }, []);
+
   if (loading) {
     return (
       <View className="flex-1 bg-cream justify-center items-center">
@@ -61,35 +67,53 @@ export default function Dashboard() {
     );
   }
 
-  // MAIN DASHBOARD UI
   return (
-    <View className="flex-1 bg-cream items-center justify-center p-8">
+    <View className="flex-1 bg-cream pt-12 px-4">
       
-      {/* Dynamic Welcome Message */}
-      <Text className="text-obsidian text-3xl font-bold mb-4">
-        {profile?.role === 'chef' ? '👨‍🍳 Chef Dashboard' : '😋 Food Feed'}
-      </Text>
-
-      <Text className="text-gray-500 text-lg text-center mb-8">
-        {profile?.role === 'chef' 
-          ? "You have 0 active orders.\nTime to cook!" 
-          : "Hungry? Find the best\nhome-cooked meals near you."}
-      </Text>
-
-      {/* Debug Info (To prove it works) */}
-      <View className="bg-gray-200 p-4 rounded-lg mb-8 w-full">
-        <Text className="font-bold text-gray-600 mb-2">DATABASE DEBUG:</Text>
-        <Text className="text-xs font-mono text-gray-500">User ID: {profile?.id}</Text>
-        <Text className="text-xs font-mono text-gray-500">Role: {profile?.role?.toUpperCase()}</Text>
+      {/* Header */}
+      <View className="flex-row justify-between items-center mb-6">
+        <View>
+          <Text className="text-gray-500 text-xs font-bold tracking-widest uppercase">
+            {profile?.role === 'chef' ? 'KITCHEN DASHBOARD' : 'DELIVERING TO'}
+          </Text>
+          <Text className="text-obsidian text-2xl font-bold">
+            {profile?.role === 'chef' ? 'My Menu 👨‍🍳' : 'Vijayapura 📍'}
+          </Text>
+        </View>
+        <TouchableOpacity onPress={async () => { await supabase.auth.signOut(); router.replace('/login'); }}>
+           <Text className="text-red-500 font-bold">Log Out</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Sign Out Button */}
-      <TouchableOpacity 
-        onPress={handleSignOut}
-        className="bg-red-500 px-6 py-3 rounded-full"
-      >
-        <Text className="text-white font-bold">Sign Out</Text>
-      </TouchableOpacity>
+      {/* Chef: Add Dish Button */}
+      {profile?.role === 'chef' && (
+        <TouchableOpacity 
+          onPress={() => router.push('/add-dish')}
+          className="bg-obsidian p-4 rounded-xl mb-6 flex-row justify-center items-center shadow-md"
+        >
+          <Text className="text-cream font-bold mr-2">+ Add New Dish</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* The Food Feed */}
+      <FlatList
+        data={dishes}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <DishCard dish={item} showAddButton={profile?.role !== 'chef'} />
+        )}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        ListEmptyComponent={
+          <View className="items-center mt-10">
+            <Text className="text-gray-400">No dishes found.</Text>
+            {profile?.role === 'chef' && <Text className="text-obsidian mt-2">Add your first dish!</Text>}
+          </View>
+        }
+        contentContainerStyle={{ paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}
+      />
     </View>
   );
 }
