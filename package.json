@@ -17,9 +17,9 @@
     "expo-image-picker": "~17.0.10",
     "expo-linear-gradient": "~15.0.8",
     "expo-linking": "~8.0.10",
+    "expo-location": "~19.0.8",
     "expo-router": "~6.0.17",
     "expo-status-bar": "~3.0.9",
-    "nativewind": "^2.0.11",
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-safe-area-context": "~5.6.0",
@@ -29,6 +29,11 @@
   },
   "private": true,
   "devDependencies": {
+    "nativewind": "^2.0.11",
+    "postcss": "^8.4.23",
     "tailwindcss": "^3.3.2"
+  },
+  "overrides": {
+    "postcss": "8.4.23"
   }
 }
