@@ -1,9 +1,9 @@
 import { View, Text, Image, TouchableOpacity, Alert } from 'react-native';
-import { useAuthStore } from '../lib/store';
+import { useCart } from '../lib/store'; // 👈 FIXED IMPORT (was useAuthStore)
 import { Ionicons } from '@expo/vector-icons';
 
 export default function DishCard({ dish, showAddButton = true, userLocation }) {
-  const { addToCart } = useAuthStore();
+  const { addToCart } = useCart(); // 👈 Use the correct hook
 
   // 1. Calculate Distance (Haversine Formula)
   function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -16,10 +16,11 @@ export default function DishCard({ dish, showAddButton = true, userLocation }) {
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
       Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c; // Result in KM
+    return R * c; 
   }
 
   // 2. Get Coordinates
+  // Note: Ensure your 'profiles' join is working, otherwise these are undefined
   const chefLat = dish.profiles?.latitude;
   const chefLon = dish.profiles?.longitude;
   
@@ -29,14 +30,23 @@ export default function DishCard({ dish, showAddButton = true, userLocation }) {
   // 3. Check Distance
   if (userLocation && chefLat) {
     distance = calculateDistance(userLocation.latitude, userLocation.longitude, chefLat, chefLon);
-    if (distance > 5) isTooFar = true; // 🚧 LIMIT: 5km
+    if (distance > 5) isTooFar = true; 
   }
+
+  const handlePress = () => {
+    if (isTooFar) {
+      Alert.alert("Too Far", "This chef is over 5km away.");
+      return;
+    }
+    console.log("Adding dish:", dish.name); // 👈 Debug log
+    addToCart(dish);
+  };
 
   return (
     <View className="bg-white rounded-2xl mb-6 shadow-sm border border-gray-100 overflow-hidden">
       <Image 
         source={{ uri: dish.image_url || 'https://via.placeholder.com/400x300' }} 
-        className="w-full h-48"
+        className="w-full h-48 bg-gray-200"
       />
       
       {/* Distance Badge */}
@@ -61,13 +71,14 @@ export default function DishCard({ dish, showAddButton = true, userLocation }) {
 
         {showAddButton && (
             <TouchableOpacity 
-                onPress={() => isTooFar ? Alert.alert("Too Far", "This chef is over 5km away.") : addToCart(dish)}
+                onPress={handlePress}
                 className={`p-4 rounded-xl flex-row justify-center items-center ${isTooFar ? 'bg-gray-300' : 'bg-obsidian'}`}
                 disabled={isTooFar}
             >
                 <Text className={`font-bold text-lg ${isTooFar ? 'text-gray-500' : 'text-cream'}`}>
                     {isTooFar ? 'Too Far' : 'Add to Cart'}
                 </Text>
+                {!isTooFar && <Ionicons name="cart" size={20} color="#FDFBF7" style={{ marginLeft: 8 }} />}
             </TouchableOpacity>
         )}
       </View>

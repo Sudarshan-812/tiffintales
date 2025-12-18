@@ -1,226 +1,217 @@
-import { View, Text, FlatList, RefreshControl, ActivityIndicator, StyleSheet, TouchableOpacity, Linking, Platform } from 'react-native';
-import { useEffect, useState, useCallback } from 'react';
-import { supabase } from '../../lib/supabase';
+import { View, Text, FlatList, TouchableOpacity, Image, RefreshControl, ScrollView, Dimensions, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { StatusBar } from 'expo-status-bar';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
-import MapView, { Marker } from 'react-native-maps'; // 📍 IMPORT MAPS
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { supabase } from '../../lib/supabase'; // 👈 Real Database
+import { useCart } from '../../lib/store';     // 👈 Get User ID
 
+const { width } = Dimensions.get('window');
+
+// 🎨 OBSIDIAN + CREAM THEME
+const COLORS = {
+  background: '#FDFBF7', 
+  surface: '#FFFFFF',    
+  obsidian: '#1A0B2E',   
+  gray: '#9CA3AF',       
+  border: '#E5E7EB',
+  gold: '#F59E0B',       
+  green: '#10B981',      
+  red: '#EF4444',        
+};
+
+const SPACING = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };
+
+// 🎯 STATUS CONFIG
+const getStatusConfig = (status) => {
+  const configs = {
+    ready: { // Changed from 'Delivered' to match DB 'ready'
+      bg: '#ECFDF5', 
+      text: COLORS.green,
+      icon: 'checkmark-circle',
+      action: 'Reorder',
+    },
+    Preparing: {
+      bg: '#FFFBEB', 
+      text: COLORS.gold,
+      icon: 'flame',
+      action:  'Track',
+    },
+    rejected: { // Changed from 'Cancelled' to match DB 'rejected'
+      bg: '#FEF2F2', 
+      text: COLORS.red,
+      icon: 'close-circle',
+      action: 'Support',
+    },
+  };
+  return configs[status] || configs['Preparing'];
+};
+
+// 📝 ORDER CARD COMPONENT
+const OrderCard = ({ item }) => {
+  const statusConfig = getStatusConfig(item.status);
+
+  // Parse Date
+  const dateStr = new Date(item.created_at).toLocaleDateString() + ', ' + new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  return (
+    <View style={{
+        backgroundColor: COLORS.surface,
+        borderRadius: 24,
+        marginBottom: SPACING.lg,
+        padding: SPACING.lg,
+        shadowColor: COLORS.obsidian,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+        elevation: 4,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+      }}
+    >
+      {/* Top Row: ID & Status */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: SPACING.md }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: COLORS.background, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="receipt" size={24} color={COLORS.obsidian} />
+            </View>
+            <View>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.obsidian }}>Order #{item.id.toString().slice(-4)}</Text>
+                <Text style={{ fontSize: 12, color: COLORS.gray, fontWeight: '500' }}>{dateStr}</Text>
+            </View>
+        </View>
+
+        {/* Status Badge */}
+        <View style={{
+            flexDirection: 'row', alignItems: 'center',
+            backgroundColor: statusConfig.bg,
+            paddingHorizontal: 10, paddingVertical: 6,
+            borderRadius: 12,
+        }}>
+            <Ionicons name={statusConfig.icon} size={12} color={statusConfig.text} style={{ marginRight: 4 }} />
+            <Text style={{ color: statusConfig.text, fontWeight: '700', fontSize: 11, textTransform: 'capitalize' }}>{item.status}</Text>
+        </View>
+      </View>
+
+      {/* Divider */}
+      <View style={{ height: 1, backgroundColor: '#F3F4F6', marginBottom: SPACING.md }} />
+
+      {/* Items Summary */}
+      <View style={{ marginBottom: SPACING.md }}>
+        {item.order_items.map((food, index) => (
+            <View key={index} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                <Text style={{ color: COLORS.gray, fontSize: 14 }}>
+                    <Text style={{ fontWeight: '700', color: COLORS.obsidian }}>{food.quantity}x</Text>  
+                    {/* We need to fetch item names ideally, but for now we show ID or fallback */}
+                     {' '}Item #{food.menu_item_id.toString().slice(0,5)}...
+                </Text>
+                <Text style={{ fontWeight: '600', color: COLORS.obsidian }}>₹{food.price}</Text>
+            </View>
+        ))}
+      </View>
+
+      {/* Bottom Row: Total */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Text style={{ fontSize: 11, color: COLORS.gray, textTransform: 'uppercase', fontWeight: '600' }}>Total Paid</Text>
+        <Text style={{ fontSize: 18, fontWeight: '800', color: COLORS.obsidian }}>₹{item.total_price}</Text>
+      </View>
+    </View>
+  );
+};
+
+// 🎯 MAIN COMPONENT
 export default function OrdersScreen() {
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const insets = useSafeAreaInsets();
+  const { user } = useCart(); // Get User ID
   const [refreshing, setRefreshing] = useState(false);
-  const router = useRouter();
+  const [orders, setOrders] = useState([]);
 
-  async function fetchOrders() {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+  // 📥 Fetch My Orders
+  const fetchOrders = async () => {
+    if (!user) return;
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*, order_items(*)')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
 
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          chef:chef_id (role, latitude, longitude), 
-          order_items (
-            quantity,
-            menu_items (name, price)
-          )
-        `)
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+    if (error) Alert.alert("Error", error.message);
+    else setOrders(data || []);
+  };
 
-      if (error) throw error;
-      setOrders(data || []);
-
-    } catch (error) {
-      console.error("Order Fetch Error:", error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }
-
-  // ⚡ REALTIME LISTENER (Clean Version)
+  // ⚡ REALTIME LISTENER
   useEffect(() => {
+    if (!user) return;
+
     fetchOrders(); // Initial load
 
-    // Subscribe to changes silently
-    const channel = supabase
-      .channel('public:orders')
+    // Listen for changes to MY orders
+    const subscription = supabase
+      .channel('user_orders')
       .on(
-        'postgres_changes', 
-        { event: '*', schema: 'public', table: 'orders' }, 
+        'postgres_changes',
+        {
+          event: 'UPDATE', // Chef changed status
+          schema: 'public',
+          table: 'orders',
+          filter: `user_id=eq.${user.id}`,
+        },
         (payload) => {
-          // When any change happens, re-fetch the data instantly
-          fetchOrders();
+          // Update the specific order in the list instantly
+          setOrders((currentOrders) =>
+            currentOrders.map((order) =>
+              order.id === payload.new.id
+                ? { ...order, status: payload.new.status } // Update status
+                : order
+            )
+          );
         }
       )
       .subscribe();
 
-    // Cleanup when leaving screen
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(subscription);
     };
-  }, []);
+  }, [user]);
 
-  const onRefresh = useCallback(() => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    fetchOrders();
-  }, []);
-
-  // 🗺️ Helper: Open Google Maps App
-  const openGoogleMaps = (lat, lng) => {
-    const scheme = Platform.select({ ios: 'maps:0,0?q=', android: 'geo:0,0?q=' });
-    const latLng = `${lat},${lng}`;
-    const label = 'Chef Kitchen';
-    const url = Platform.select({
-      ios: `${scheme}${label}@${latLng}`,
-      android: `${scheme}${latLng}(${label})`
-    });
-    Linking.openURL(url);
-  };
-
-  // 🎨 Status Visuals
-  const getStatusConfig = (status) => {
-    switch (status) {
-      case 'pending': return { bgGradient: ['#FFFBEB', '#FEF3C7'], accent: '#F59E0B', text: '#92400E', label: 'Sent to Chef', icon: 'paper-plane', desc: 'Waiting for chef to accept...' };
-      case 'cooking': return { bgGradient: ['#FFF7ED', '#FFEDD5'], accent: '#EA580C', text: '#9A3412', label: 'Being Prepared', icon: 'flame', desc: 'Your food is on the stove!' };
-      case 'ready':   return { bgGradient: ['#F0FDF4', '#DCFCE7'], accent: '#059669', text: '#065F46', label: 'Ready for Pickup', icon: 'gift', desc: 'Head to the kitchen to collect.' };
-      default:        return { bgGradient: ['#F3F4F6', '#E5E7EB'], accent: '#6B7280', text: '#374151', label: 'Unknown', icon: 'help', desc: 'Status unknown' };
-    }
-  };
-
-  const renderOrder = ({ item }) => {
-    const status = getStatusConfig(item.status);
-    const hasLocation = item.chef?.latitude && item.chef?.longitude;
-
-    return (
-      <View style={styles.cardContainer}>
-        {/* Header */}
-        <LinearGradient colors={status.bgGradient} start={{x:0,y:0}} end={{x:0,y:1}} style={styles.headerGradient}>
-          <View style={styles.headerRow}>
-            <View>
-                <Text style={styles.dateText}>{new Date(item.created_at).toLocaleDateString()} • {new Date(item.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
-                <Text style={styles.chefText}>Order #{item.id.slice(0,5)}</Text>
-            </View>
-            <View style={[styles.statusBadge, { shadowColor: status.accent }]}>
-                <Ionicons name={status.icon} size={14} color={status.accent} />
-                <Text style={[styles.statusText, { color: status.text }]}>{status.label}</Text>
-            </View>
-          </View>
-        </LinearGradient>
-
-        <View style={styles.contentContainer}>
-            {/* Status Message */}
-            <View style={styles.statusMessage}>
-                <Ionicons name="information-circle-outline" size={18} color="#6B7280" />
-                <Text style={styles.statusDesc}>{status.desc}</Text>
-            </View>
-
-            {/* 🗺️ MAP SECTION (Only renders if status is 'ready' AND location exists) */}
-            {item.status === 'ready' && hasLocation && (
-                <View style={styles.mapContainer}>
-                    <MapView
-                        style={styles.map}
-                        initialRegion={{
-                            latitude: item.chef.latitude,
-                            longitude: item.chef.longitude,
-                            latitudeDelta: 0.01,
-                            longitudeDelta: 0.01,
-                        }}
-                        scrollEnabled={false} // Static map
-                        pitchEnabled={false}
-                    >
-                        <Marker coordinate={{ latitude: item.chef.latitude, longitude: item.chef.longitude }} />
-                    </MapView>
-                    
-                    {/* Overlay Button */}
-                    <TouchableOpacity 
-                        style={styles.directionsButton}
-                        onPress={() => openGoogleMaps(item.chef.latitude, item.chef.longitude)}
-                    >
-                        <Ionicons name="navigate" size={16} color="white" />
-                        <Text style={styles.directionsText}>Get Directions</Text>
-                    </TouchableOpacity>
-                </View>
-            )}
-
-            {/* Items List */}
-            {item.order_items.map((orderItem, index) => (
-                <View key={index} style={styles.itemRow}>
-                    <Text style={styles.itemText}><Text style={{fontWeight: 'bold'}}>{orderItem.quantity}x </Text>{orderItem.menu_items?.name}</Text>
-                    <Text style={styles.itemPrice}>₹{orderItem.menu_items?.price * orderItem.quantity}</Text>
-                </View>
-            ))}
-
-            <View style={styles.divider} />
-            <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Total Paid</Text>
-                <Text style={styles.totalAmount}>₹{item.total_price}</Text>
-            </View>
-        </View>
-      </View>
-    );
+    await fetchOrders();
+    setRefreshing(false);
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-          <Text style={styles.headerTitle}>My Orders 📦</Text>
+    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+      <StatusBar style="dark" />
+
+      {/* HEADER */}
+      <View style={{
+          paddingTop: insets.top + 10,
+          paddingBottom: SPACING.md,
+          paddingHorizontal: SPACING.lg,
+          backgroundColor: COLORS.background,
+      }}>
+        <Text style={{ fontSize: 28, fontWeight: '800', color: COLORS.obsidian, letterSpacing: -0.5 }}>
+          Orders
+        </Text>
       </View>
 
-      {loading ? <ActivityIndicator size="large" color="#1A0B2E" style={{marginTop: 50}} /> : 
-        <FlatList
-          data={orders}
-          keyExtractor={(item) => item.id}
-          renderItem={renderOrder}
-          contentContainerStyle={{ padding: 16 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>No orders yet.</Text>
-                <TouchableOpacity onPress={() => router.push('/')} style={styles.browseButton}>
-                    <Text style={styles.browseText}>Browse Menu</Text>
-                </TouchableOpacity>
-            </View>
-          }
-        />
-      }
+      {/* ORDERS LIST */}
+      <FlatList
+        data={orders}
+        keyExtractor={(item) => item.id.toString()}
+        renderItem={({ item }) => <OrderCard item={item} />}
+        contentContainerStyle={{ padding: SPACING.lg, paddingBottom: 120 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.obsidian} />}
+        ListEmptyComponent={
+          <View style={{ alignItems: 'center', marginTop: 100 }}>
+             <Ionicons name="receipt-outline" size={60} color={COLORS.border} />
+             <Text style={{ marginTop: 16, color: COLORS.gray, fontSize: 16, fontWeight: '600' }}>No orders yet.</Text>
+          </View>
+        }
+      />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FAFAFA' },
-  header: { padding: 24, paddingTop: 60, backgroundColor: 'white' },
-  headerTitle: { fontSize: 28, fontWeight: '800', color: '#1A0B2E' },
-  cardContainer: { backgroundColor: 'white', borderRadius: 20, marginBottom: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 4, overflow: 'hidden', borderWidth: 1, borderColor: '#F3F4F6' },
-  headerGradient: { padding: 16 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  dateText: { fontSize: 10, color: '#6B7280', fontWeight: '600', marginBottom: 4 },
-  chefText: { fontSize: 16, fontWeight: 'bold', color: '#1F2937' },
-  statusBadge: { backgroundColor: 'white', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, flexDirection: 'row', alignItems: 'center', elevation: 2 },
-  statusText: { fontSize: 10, fontWeight: '800', marginLeft: 4, textTransform: 'uppercase' },
-  contentContainer: { padding: 16 },
-  statusMessage: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F9FAFB', padding: 10, borderRadius: 10, marginBottom: 16 },
-  statusDesc: { fontSize: 13, color: '#4B5563', marginLeft: 8, fontWeight: '500' },
-  
-  // 🗺️ MAP STYLES
-  mapContainer: { height: 150, borderRadius: 12, overflow: 'hidden', marginBottom: 16, position: 'relative' },
-  map: { width: '100%', height: '100%' },
-  directionsButton: { position: 'absolute', bottom: 10, right: 10, backgroundColor: '#1A0B2E', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, flexDirection: 'row', alignItems: 'center', elevation: 5 },
-  directionsText: { color: 'white', fontWeight: 'bold', fontSize: 12, marginLeft: 4 },
-
-  itemRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  itemText: { fontSize: 14, color: '#374151' },
-  itemPrice: { fontSize: 14, color: '#6B7280' },
-  divider: { height: 1, backgroundColor: '#F3F4F6', marginVertical: 12 },
-  totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  totalLabel: { fontSize: 12, fontWeight: 'bold', color: '#9CA3AF', textTransform: 'uppercase' },
-  totalAmount: { fontSize: 20, fontWeight: '800', color: '#1A0B2E' },
-  emptyState: { alignItems: 'center', marginTop: 100 },
-  emptyText: { fontSize: 18, color: '#9CA3AF', marginBottom: 20 },
-  browseButton: { backgroundColor: '#1A0B2E', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 30 },
-  browseText: { color: 'white', fontWeight: 'bold' }
-});

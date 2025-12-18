@@ -1,151 +1,196 @@
-import { View, Text, ActivityIndicator, TouchableOpacity, FlatList, RefreshControl, Alert } from 'react-native';
-import { useEffect, useState, useCallback } from 'react';
+import { View, Text, FlatList, Image, TouchableOpacity, TextInput, ActivityIndicator, Alert, StatusBar } from 'react-native';
+import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { useRouter } from 'expo-router';
-import * as Location from 'expo-location'; // 1. Import Location
-import DishCard from '../../components/DishCard';
-import OrderCard from '../../components/OrderCard';
-import { useAuthStore } from '../../lib/store';
+import { useCart } from '../../lib/store'; 
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router'; 
+import { useSafeAreaInsets } from 'react-native-safe-area-context'; 
 
-export default function Dashboard() {
-  const router = useRouter();
-  const [profile, setProfile] = useState(null);
-  const [dishes, setDishes] = useState([]);
+// 🎨 Theme Colors
+const COLORS = {
+  background: '#FDFBF7', // Cream
+  surface: '#FFFFFF',
+  obsidian: '#1A0B2E',
+  gold: '#F59E0B',
+  gray: '#94A3B8',
+  red: '#EF4444'
+};
+
+export default function HomeScreen() {
+  const insets = useSafeAreaInsets(); 
+  const router = useRouter(); 
+  const [menuItems, setMenuItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [location, setLocation] = useState(null); // 2. State for GPS
-  const [errorMsg, setErrorMsg] = useState(null);
-
-  const { cart, getCartTotal } = useAuthStore(); 
-  const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const totalPrice = getCartTotal();
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // 🛒 Get Actions from Store
+  const { addToCart, cart, getCartTotal, signOut } = useCart(); 
 
   useEffect(() => {
-    fetchData();
-    getUserLocation(); // 3. Get Location on Load
+    fetchMenu();
   }, []);
 
-  // 📍 Function to ask permission and get coords
-  async function getUserLocation() {
-    let { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') {
-      setErrorMsg('Permission to access location was denied');
-      Alert.alert("Permission Denied", "We need your location to show nearby food.");
-      return;
+  async function fetchMenu() {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('menu_items')
+      .select('*, chef_id'); 
+    
+    if (error) {
+      Alert.alert('Error', error.message);
+    } else {
+      setMenuItems(data);
     }
-
-    let userLocation = await Location.getCurrentPositionAsync({});
-    setLocation(userLocation.coords);
-    console.log("📍 User GPS:", userLocation.coords);
+    setLoading(false);
   }
 
-  async function fetchData() {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.replace('/login'); return; }
+  // Filter Logic
+  const filteredItems = menuItems.filter(item => 
+    item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
 
-      const { data: profileData } = await supabase
-        .from('profiles').select('*').eq('id', user.id).single();
-      setProfile(profileData);
+  // 🧮 Calculate Totals for Floating Bar
+  const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const cartTotal = getCartTotal();
 
-      if (profileData.role === 'chef') {
-        // Chef Logic
-        const { data: orderData, error: orderError } = await supabase
-          .from('orders')
-          .select(`*, profiles:user_id(role), order_items(quantity, menu_items(name, price))`)
-          .eq('chef_id', user.id)
-          .neq('status', 'delivered')
-          .order('created_at', { ascending: false });
+  const ListHeader = () => (
+    <View style={{ paddingTop: insets.top + 10, paddingHorizontal: 20, paddingBottom: 20, backgroundColor: COLORS.background }}>
+      {/* Location & Logout Row */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+        <View>
+          <Text style={{ color: COLORS.gray, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>Delivering To</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+            <Ionicons name="location" size={20} color="#E11D48" />
+            <Text style={{ color: COLORS.obsidian, fontSize: 18, fontWeight: '800', marginLeft: 4 }}>Vijayapura</Text>
+          </View>
+        </View>
         
-        if (orderError) throw orderError;
-        setDishes(orderData || []);
-      } else {
-        // 👨‍🎓 Student Logic: Fetch Menu + CHEF LOCATION
-        const { data: feedData, error: feedError } = await supabase
-          .from('menu_items')
-          .select(`*, profiles:chef_id (latitude, longitude)`) // Fetching Chef Coords
-          .order('created_at', { ascending: false });
-
-        if (feedError) throw feedError;
-        setDishes(feedData || []);
-      }
-
-    } catch (error) {
-      console.error("Error:", error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }
-
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    fetchData();
-    getUserLocation();
-  }, []);
-
-  if (loading) {
-    return (
-      <View className="flex-1 bg-cream justify-center items-center">
-        <ActivityIndicator size="large" color="#1A0B2E" />
+        <TouchableOpacity 
+           onPress={() => {
+             Alert.alert("Log Out", "Are you sure you want to exit?", [
+               { text: "Cancel", style: "cancel" },
+               { text: "Log Out", style: "destructive", onPress: async () => {
+                   await signOut();
+                   router.replace('/login');
+                 }
+               }
+             ]);
+           }}
+           style={{ backgroundColor: 'white', padding: 10, borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0' }}
+        >
+           <Ionicons name="log-out-outline" size={22} color={COLORS.red} />
+        </TouchableOpacity>
       </View>
-    );
-  }
+
+      {/* Hero Title */}
+      <Text style={{ fontSize: 32, fontWeight: '800', color: COLORS.obsidian, lineHeight: 40 }}>
+        What's in your{"\n"}
+        <Text style={{ color: '#E11D48' }}>tiffin today?</Text> 🥘
+      </Text>
+
+      {/* Search Bar */}
+      <View style={{ 
+          flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', 
+          padding: 14, borderRadius: 16, marginTop: 24, borderWidth: 1, borderColor: '#E2E8F0',
+          shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 10, elevation: 2
+      }}>
+        <Ionicons name="search" size={20} color={COLORS.gray} />
+        <TextInput 
+          placeholder="Search for homemade food..." 
+          placeholderTextColor={COLORS.gray}
+          style={{ flex: 1, marginLeft: 10, fontSize: 16, color: COLORS.obsidian, fontWeight: '500' }}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+      </View>
+    </View>
+  );
+
+  const renderItem = ({ item }) => (
+    <View style={{ 
+        backgroundColor: 'white', borderRadius: 24, marginBottom: 20, marginHorizontal: 20, 
+        shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 15, elevation: 3,
+        borderWidth: 1, borderColor: '#F1F5F9', overflow: 'hidden'
+    }}>
+      <Image 
+        source={{ uri: item.image_url }} 
+        style={{ width: '100%', height: 180, backgroundColor: '#E2E8F0' }} 
+        resizeMode="cover" 
+      />
+      <View style={{ padding: 20 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <View style={{ flex: 1, marginRight: 10 }}>
+                <Text style={{ fontSize: 20, fontWeight: '800', color: COLORS.obsidian, marginBottom: 4 }}>{item.name}</Text>
+                <Text style={{ color: COLORS.gray, fontSize: 14, lineHeight: 20 }} numberOfLines={2}>{item.description}</Text>
+            </View>
+            <Text style={{ fontSize: 20, fontWeight: '800', color: COLORS.obsidian }}>₹{item.price}</Text>
+        </View>
+        
+        <View style={{ marginTop: 20, flexDirection: 'row', justifyContent: 'flex-end' }}>
+            <TouchableOpacity 
+                onPress={() => addToCart(item)}
+                style={{ 
+                    backgroundColor: COLORS.obsidian, paddingHorizontal: 20, paddingVertical: 12, 
+                    borderRadius: 14, flexDirection: 'row', alignItems: 'center' 
+                }}
+            >
+                <Text style={{ color: '#FDFBF7', fontWeight: '700', marginRight: 8 }}>Add to Tiffin</Text>
+                <Ionicons name="add" size={20} color="#FDFBF7" />
+            </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
 
   return (
-    <View className="flex-1 bg-cream">
-      <FlatList
-        data={dishes}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        
-        ListHeaderComponent={
-          <View className="mb-6 mt-12">
-            <View className="flex-row justify-between items-center mb-6">
-              <View>
-                <Text className="text-gray-500 text-xs font-bold tracking-widest uppercase">
-                  {profile?.role === 'chef' ? 'KITCHEN DISPLAY' : 'DELIVERING TO'}
-                </Text>
-                <Text className="text-obsidian text-2xl font-bold">
-                  {profile?.role === 'chef' ? 'Incoming Orders 👨‍🍳' : 'Vijayapura 📍'}
-                </Text>
-                {/* Debug Text */}
-                {location && <Text className="text-green-600 text-xs">GPS Active ✅</Text>}
-              </View>
-              <TouchableOpacity onPress={async () => { await supabase.auth.signOut(); router.replace('/login'); }}>
-                <Text className="text-red-500 font-bold">Log Out</Text>
-              </TouchableOpacity>
-            </View>
-            
-            {profile?.role === 'chef' && (
-              <TouchableOpacity onPress={() => router.push('/add-dish')} className="bg-obsidian p-4 rounded-xl mb-4 flex-row justify-center items-center shadow-md">
-                <Text className="text-cream font-bold mr-2">+ Add New Dish</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        }
+    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+      <StatusBar barStyle="dark-content" />
+      
+      {loading ? (
+        <ActivityIndicator size="large" color={COLORS.obsidian} style={{ marginTop: 100 }} />
+      ) : (
+        <FlatList
+          data={filteredItems}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={renderItem}
+          ListHeaderComponent={ListHeader}
+          contentContainerStyle={{ paddingBottom: 150 }} // Extra padding so list doesn't hide behind floating bar
+          showsVerticalScrollIndicator={false}
+        />
+      )}
 
-        renderItem={({ item }) => {
-          if (profile?.role === 'chef') {
-            return <OrderCard order={item} onUpdate={fetchData} />;
-          } else {
-            // 4. Pass User Location to DishCard
-            return <DishCard dish={item} showAddButton={true} userLocation={location} />;
-          }
-        }}
-      />
-
-      {totalItems > 0 && profile?.role !== 'chef' && (
-        <View className="absolute bottom-8 left-4 right-4">
-          <TouchableOpacity onPress={() => router.push('/cart')} className="bg-obsidian p-4 rounded-xl flex-row justify-between items-center shadow-lg">
-            <View className="flex-row items-center">
-              <View className="bg-cream w-8 h-8 rounded-full items-center justify-center mr-3">
-                <Text className="text-obsidian font-bold">{totalItems}</Text>
-              </View>
-              <Text className="text-cream font-bold text-lg">View Cart</Text>
+      {/* 🛑 FLOATING CART BAR (Only shows if cart has items) */}
+      {cart.length > 0 && (
+        <View style={{ 
+            position: 'absolute', bottom: 90, left: 20, right: 20, // Positioned above Tab Bar
+            zIndex: 50 
+        }}>
+          <TouchableOpacity 
+            onPress={() => router.push('/cart')} // 👈 Navigates to Cart Screen
+            style={{ 
+              backgroundColor: COLORS.obsidian, borderRadius: 20, padding: 16,
+              flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+              shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{ 
+                    backgroundColor: 'rgba(255,255,255,0.2)', width: 40, height: 40, 
+                    borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 12 
+                }}>
+                    <Text style={{ color: 'white', fontWeight: '800', fontSize: 16 }}>{cartItemCount}</Text>
+                </View>
+                <View>
+                    <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '700', textTransform: 'uppercase' }}>Total</Text>
+                    <Text style={{ color: 'white', fontWeight: '800', fontSize: 18 }}>₹{cartTotal}</Text>
+                </View>
             </View>
-            <Text className="text-cream font-bold text-lg">₹{totalPrice}</Text>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={{ color: 'white', fontWeight: '700', fontSize: 16, marginRight: 8 }}>View Cart</Text>
+                <Ionicons name="arrow-forward-circle" size={24} color="white" />
+            </View>
           </TouchableOpacity>
         </View>
       )}
