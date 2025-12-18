@@ -41,8 +41,27 @@ export default function OrdersScreen() {
     }
   }
 
+  // ⚡ REALTIME LISTENER (Clean Version)
   useEffect(() => {
-    fetchOrders();
+    fetchOrders(); // Initial load
+
+    // Subscribe to changes silently
+    const channel = supabase
+      .channel('public:orders')
+      .on(
+        'postgres_changes', 
+        { event: '*', schema: 'public', table: 'orders' }, 
+        (payload) => {
+          // When any change happens, re-fetch the data instantly
+          fetchOrders();
+        }
+      )
+      .subscribe();
+
+    // Cleanup when leaving screen
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const onRefresh = useCallback(() => {
@@ -74,7 +93,6 @@ export default function OrdersScreen() {
 
   const renderOrder = ({ item }) => {
     const status = getStatusConfig(item.status);
-    // Check if we have valid coordinates
     const hasLocation = item.chef?.latitude && item.chef?.longitude;
 
     return (
