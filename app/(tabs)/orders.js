@@ -1,217 +1,261 @@
-import { View, Text, FlatList, TouchableOpacity, Image, RefreshControl, ScrollView, Dimensions, Alert } from 'react-native';
+import { 
+  View, 
+  Text, 
+  FlatList, 
+  RefreshControl, 
+  ActivityIndicator, 
+  StyleSheet, 
+  Image,
+  TouchableOpacity
+} from 'react-native';
+import { useEffect, useState, useCallback } from 'react';
+import { supabase } from '../../lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
-import { StatusBar } from 'expo-status-bar';
-import { useState, useEffect } from 'react';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { supabase } from '../../lib/supabase'; // 👈 Real Database
-import { useCart } from '../../lib/store';     // 👈 Get User ID
 
-const { width } = Dimensions.get('window');
-
-// 🎨 OBSIDIAN + CREAM THEME
+// 🎨 Premium Theme
 const COLORS = {
-  background: '#FDFBF7', 
-  surface: '#FFFFFF',    
-  obsidian: '#1A0B2E',   
-  gray: '#9CA3AF',       
+  background: '#F9FAFB',
+  surface: '#FFFFFF',
+  obsidian: '#111827',
+  gray: '#6B7280',
+  lightGray: '#F3F4F6',
+  green: '#10B981',
+  orange: '#F59E0B',
+  blue: '#3B82F6',
+  red: '#EF4444',
   border: '#E5E7EB',
-  gold: '#F59E0B',       
-  green: '#10B981',      
-  red: '#EF4444',        
 };
 
-const SPACING = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };
+// 🚦 STATUS BADGE
+const StatusBadge = ({ status }) => {
+  let color = COLORS.gray;
+  let icon = 'time-outline';
+  let bg = COLORS.lightGray;
+  let label = status;
 
-// 🎯 STATUS CONFIG
-const getStatusConfig = (status) => {
-  const configs = {
-    ready: { // Changed from 'Delivered' to match DB 'ready'
-      bg: '#ECFDF5', 
-      text: COLORS.green,
-      icon: 'checkmark-circle',
-      action: 'Reorder',
-    },
-    Preparing: {
-      bg: '#FFFBEB', 
-      text: COLORS.gold,
-      icon: 'flame',
-      action:  'Track',
-    },
-    rejected: { // Changed from 'Cancelled' to match DB 'rejected'
-      bg: '#FEF2F2', 
-      text: COLORS.red,
-      icon: 'close-circle',
-      action: 'Support',
-    },
-  };
-  return configs[status] || configs['Preparing'];
-};
-
-// 📝 ORDER CARD COMPONENT
-const OrderCard = ({ item }) => {
-  const statusConfig = getStatusConfig(item.status);
-
-  // Parse Date
-  const dateStr = new Date(item.created_at).toLocaleDateString() + ', ' + new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  switch (status) {
+    case 'pending':
+      color = COLORS.orange;
+      icon = 'hourglass-outline';
+      bg = '#FEF3C7';
+      label = 'Waiting for Chef';
+      break;
+    case 'cooking':
+      color = COLORS.blue;
+      icon = 'flame';
+      bg = '#EFF6FF';
+      label = 'Cooking Now';
+      break;
+    case 'ready':
+      color = COLORS.green;
+      icon = 'bicycle';
+      bg = '#D1FAE5';
+      label = 'Out for Delivery';
+      break;
+    case 'delivered':
+      color = COLORS.obsidian;
+      icon = 'checkmark-circle';
+      bg = '#F3F4F6';
+      label = 'Delivered';
+      break;
+    case 'rejected':
+      color = COLORS.red;
+      icon = 'close-circle';
+      bg = '#FEE2E2';
+      label = 'Cancelled';
+      break;
+  }
 
   return (
-    <View style={{
-        backgroundColor: COLORS.surface,
-        borderRadius: 24,
-        marginBottom: SPACING.lg,
-        padding: SPACING.lg,
-        shadowColor: COLORS.obsidian,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
-        elevation: 4,
-        borderWidth: 1,
-        borderColor: COLORS.border,
-      }}
-    >
-      {/* Top Row: ID & Status */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: SPACING.md }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: COLORS.background, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
-                <Ionicons name="receipt" size={24} color={COLORS.obsidian} />
-            </View>
-            <View>
-                <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.obsidian }}>Order #{item.id.toString().slice(-4)}</Text>
-                <Text style={{ fontSize: 12, color: COLORS.gray, fontWeight: '500' }}>{dateStr}</Text>
-            </View>
-        </View>
-
-        {/* Status Badge */}
-        <View style={{
-            flexDirection: 'row', alignItems: 'center',
-            backgroundColor: statusConfig.bg,
-            paddingHorizontal: 10, paddingVertical: 6,
-            borderRadius: 12,
-        }}>
-            <Ionicons name={statusConfig.icon} size={12} color={statusConfig.text} style={{ marginRight: 4 }} />
-            <Text style={{ color: statusConfig.text, fontWeight: '700', fontSize: 11, textTransform: 'capitalize' }}>{item.status}</Text>
-        </View>
-      </View>
-
-      {/* Divider */}
-      <View style={{ height: 1, backgroundColor: '#F3F4F6', marginBottom: SPACING.md }} />
-
-      {/* Items Summary */}
-      <View style={{ marginBottom: SPACING.md }}>
-        {item.order_items.map((food, index) => (
-            <View key={index} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                <Text style={{ color: COLORS.gray, fontSize: 14 }}>
-                    <Text style={{ fontWeight: '700', color: COLORS.obsidian }}>{food.quantity}x</Text>  
-                    {/* We need to fetch item names ideally, but for now we show ID or fallback */}
-                     {' '}Item #{food.menu_item_id.toString().slice(0,5)}...
-                </Text>
-                <Text style={{ fontWeight: '600', color: COLORS.obsidian }}>₹{food.price}</Text>
-            </View>
-        ))}
-      </View>
-
-      {/* Bottom Row: Total */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text style={{ fontSize: 11, color: COLORS.gray, textTransform: 'uppercase', fontWeight: '600' }}>Total Paid</Text>
-        <Text style={{ fontSize: 18, fontWeight: '800', color: COLORS.obsidian }}>₹{item.total_price}</Text>
-      </View>
+    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: bg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+      <Ionicons name={icon} size={12} color={color} style={{ marginRight: 4 }} />
+      <Text style={{ color: color, fontSize: 11, fontWeight: '700', textTransform: 'capitalize' }}>{label}</Text>
     </View>
   );
 };
 
-// 🎯 MAIN COMPONENT
 export default function OrdersScreen() {
   const insets = useSafeAreaInsets();
-  const { user } = useCart(); // Get User ID
-  const [refreshing, setRefreshing] = useState(false);
   const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const router = useRouter();
 
-  // 📥 Fetch My Orders
+  // 📥 FETCH ORDERS
   const fetchOrders = async () => {
-    if (!user) return;
-    const { data, error } = await supabase
-      .from('orders')
-      .select('*, order_items(*)')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-    if (error) Alert.alert("Error", error.message);
-    else setOrders(data || []);
+      const { data, error } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          order_items (
+            quantity,
+            price,
+            menu_items ( name, image_url )
+          )
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error("Supabase Error:", error);
+      } else {
+        setOrders(data || []);
+      }
+    } catch (e) {
+      console.log(e);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   };
 
-  // ⚡ REALTIME LISTENER
+  useFocusEffect(
+    useCallback(() => {
+      fetchOrders();
+    }, [])
+  );
+
+  // 📡 REALTIME UPDATES
   useEffect(() => {
-    if (!user) return;
-
-    fetchOrders(); // Initial load
-
-    // Listen for changes to MY orders
-    const subscription = supabase
-      .channel('user_orders')
+    const channel = supabase.channel('student_orders')
       .on(
         'postgres_changes',
-        {
-          event: 'UPDATE', // Chef changed status
-          schema: 'public',
-          table: 'orders',
-          filter: `user_id=eq.${user.id}`,
-        },
+        { event: 'UPDATE', schema: 'public', table: 'orders' },
         (payload) => {
           // Update the specific order in the list instantly
-          setOrders((currentOrders) =>
-            currentOrders.map((order) =>
-              order.id === payload.new.id
-                ? { ...order, status: payload.new.status } // Update status
-                : order
-            )
+          setOrders(currentOrders => 
+            currentOrders.map(o => o.id === payload.new.id ? { ...o, status: payload.new.status } : o)
           );
         }
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(subscription);
-    };
-  }, [user]);
+    return () => supabase.removeChannel(channel);
+  }, []);
 
-  const onRefresh = async () => {
+  const onRefresh = () => {
     setRefreshing(true);
-    await fetchOrders();
-    setRefreshing(false);
+    fetchOrders();
+  };
+
+  const renderOrder = ({ item }) => {
+    // Get first item image or placeholder
+    const firstItemImage = item.order_items?.[0]?.menu_items?.image_url;
+    const itemsText = item.order_items.map(i => `${i.quantity}x ${i.menu_items?.name}`).join(', ');
+
+    return (
+      <View style={styles.card}>
+        {/* Header: Date & Status */}
+        <View style={styles.cardHeader}>
+          <Text style={styles.date}>
+            {new Date(item.created_at).toLocaleDateString('en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+          </Text>
+          <StatusBadge status={item.status} />
+        </View>
+
+        <View style={styles.divider} />
+
+        {/* Content Row */}
+        <View style={styles.contentRow}>
+          {/* Image */}
+          <Image 
+            source={{ uri: firstItemImage || 'https://via.placeholder.com/100' }} 
+            style={styles.image}
+          />
+          
+          {/* Info */}
+          <View style={styles.info}>
+            <Text style={styles.itemsText} numberOfLines={2}>
+              {itemsText}
+            </Text>
+            <Text style={styles.price}>₹{item.total_price}</Text>
+          </View>
+        </View>
+
+        {/* Action / ID */}
+        <View style={styles.footer}>
+           <Text style={styles.orderId}>ID: #{item.id.toString().slice(-6)}</Text>
+           {/* If cooking, show pulse or specialized text could go here */}
+        </View>
+      </View>
+    );
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-      <StatusBar style="dark" />
-
-      {/* HEADER */}
-      <View style={{
-          paddingTop: insets.top + 10,
-          paddingBottom: SPACING.md,
-          paddingHorizontal: SPACING.lg,
-          backgroundColor: COLORS.background,
-      }}>
-        <Text style={{ fontSize: 28, fontWeight: '800', color: COLORS.obsidian, letterSpacing: -0.5 }}>
-          Orders
-        </Text>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      {/* Header */}
+      <View style={styles.screenHeader}>
+        <Text style={styles.screenTitle}>Your Orders</Text>
       </View>
 
-      {/* ORDERS LIST */}
-      <FlatList
-        data={orders}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item }) => <OrderCard item={item} />}
-        contentContainerStyle={{ padding: SPACING.lg, paddingBottom: 120 }}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.obsidian} />}
-        ListEmptyComponent={
-          <View style={{ alignItems: 'center', marginTop: 100 }}>
-             <Ionicons name="receipt-outline" size={60} color={COLORS.border} />
-             <Text style={{ marginTop: 16, color: COLORS.gray, fontSize: 16, fontWeight: '600' }}>No orders yet.</Text>
-          </View>
-        }
-      />
+      {loading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={COLORS.obsidian} />
+        </View>
+      ) : (
+        <FlatList
+          data={orders}
+          keyExtractor={item => item.id.toString()}
+          renderItem={renderOrder}
+          contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          ListEmptyComponent={
+            <View style={{ alignItems: 'center', marginTop: 100 }}>
+              <Ionicons name="receipt-outline" size={64} color={COLORS.gray} style={{ opacity: 0.5 }} />
+              <Text style={{ marginTop: 16, color: COLORS.gray, fontSize: 16, fontWeight: '600' }}>
+                No active orders
+              </Text>
+              <TouchableOpacity onPress={() => router.push('/(tabs)')} style={{ marginTop: 20 }}>
+                 <Text style={{ color: COLORS.obsidian, fontWeight: '700' }}>Browse Menu</Text>
+              </TouchableOpacity>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: COLORS.background },
+  screenHeader: { paddingHorizontal: 20, paddingBottom: 10, paddingTop: 10, backgroundColor: COLORS.background },
+  screenTitle: { fontSize: 28, fontWeight: '800', color: COLORS.obsidian },
+  
+  card: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    marginBottom: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  date: { fontSize: 12, color: COLORS.gray, fontWeight: '600' },
+  
+  divider: { height: 1, backgroundColor: COLORS.lightGray, marginBottom: 12 },
+  
+  contentRow: { flexDirection: 'row', alignItems: 'center' },
+  image: { width: 50, height: 50, borderRadius: 8, backgroundColor: COLORS.lightGray, marginRight: 12 },
+  info: { flex: 1 },
+  itemsText: { fontSize: 14, color: COLORS.obsidian, fontWeight: '500', marginBottom: 4 },
+  price: { fontSize: 16, fontWeight: '800', color: COLORS.obsidian },
+  
+  footer: { marginTop: 12, flexDirection: 'row', justifyContent: 'flex-end' },
+  orderId: { fontSize: 10, color: COLORS.gray, fontWeight: '600', textTransform: 'uppercase' },
+});

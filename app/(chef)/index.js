@@ -1,5 +1,6 @@
-import { View, Text, FlatList, TouchableOpacity, RefreshControl, StyleSheet, Alert, ActivityIndicator } from 'react-native';
-import { useState, useCallback } from 'react';
+
+import { View, Text, FlatList, TouchableOpacity, RefreshControl, StyleSheet, Alert, ActivityIndicator, Platform } from 'react-native';
+import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useCart } from '../../lib/store';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import OrderCard from '../../components/OrderCard';
+
 
 // 🎨 BRAND THEME
 const COLORS = {
@@ -27,29 +29,19 @@ export default function ChefDashboard() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ earnings: 0, active: 0 });
 
-  // 🔄 REFRESH DATA LOGIC (Self-Healing Version)
+  // 🔄 1. DATA FETCHING LOGIC
   const fetchDashboardData = async () => {
-    
-    // 1. 🛡️ Try to get user from Store OR Supabase directly
     let currentUser = user;
-
     if (!currentUser) {
-      console.log("🔄 Store empty. Checking Supabase session...");
       const { data } = await supabase.auth.getUser();
       currentUser = data.user;
     }
-
-    // 2. 🚨 If STILL no user, we are truly logged out.
     if (!currentUser) {
-      console.log("❌ No active session. Redirecting to login.");
       setLoading(false);
-      // Optional: router.replace('/login'); 
-      // (Commented out to prevent accidental kicks during dev, uncomment for production)
       return;
     }
     
-    console.log("------------------------------------------------");
-    console.log("👨‍🍳 Fetching Orders for Chef ID:", currentUser.id);
+    // console.log("👨‍🍳 Refreshing Kitchen Board..."); // Commented out to reduce noise
 
     try {
       const { data, error } = await supabase
@@ -61,15 +53,14 @@ export default function ChefDashboard() {
             menu_items ( name, price )
           )
         `)
-        .eq('chef_id', currentUser.id) // 👈 Use the confirmed currentUser
+        .eq('chef_id', currentUser.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      console.log(`✅ Success! Found ${data?.length || 0} orders.`);
       setOrders(data || []);
 
-      // Calculate Stats
+      // Stats
       const today = new Date().toISOString().split('T')[0];
       const earnings = (data || [])
         .filter(o => o.created_at.startsWith(today) && o.status === 'ready')
@@ -82,18 +73,51 @@ export default function ChefDashboard() {
 
     } catch (error) {
       console.error("🚨 DASHBOARD ERROR:", error.message);
-      Alert.alert("Error Loading Dashboard", error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // ⚡ Auto-Fetch when screen opens
+  // ⚡ 2. INITIAL LOAD
   useFocusEffect(
     useCallback(() => {
       fetchDashboardData();
     }, [user])
   );
+
+  // 🔔 3. REALTIME LISTENER (The Magic Part)
+  useEffect(() => {
+    if (!user) return;
+
+    console.log("📡 Connecting to Realtime Order Stream...");
+
+    const channel = supabase
+      .channel('chef-dashboard')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT', // Listen specifically for NEW orders
+          schema: 'public',
+          table: 'orders',
+          filter: `chef_id=eq.${user.id}`, // Only listen for MY orders
+        },
+        (payload) => {
+          console.log("🔔 DING! New Order Received:", payload.new.id);
+          
+          // 1. Play Sound / Vibrate (Native Alert for now)
+          Alert.alert("🔔 New Tiffin Order!", "A student just placed an order.");
+          
+          // 2. Instantly reload the list to show the new card
+          fetchDashboardData();
+        }
+      )
+      .subscribe();
+
+    // Cleanup: Unsubscribe when leaving the screen
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -102,7 +126,7 @@ export default function ChefDashboard() {
   };
 
   const handleLogout = () => {
-    Alert.alert("Close Kitchen?", "Are you sure you want to log out?", [
+    Alert.alert("Close Kitchen?", "Log out?", [
       { text: "Cancel", style: "cancel" },
       { text: "Log Out", style: "destructive", onPress: async () => {
           await signOut();
@@ -111,9 +135,9 @@ export default function ChefDashboard() {
     ]);
   };
 
+  // ... (Header and UI components remain EXACTLY the same as before) ...
   const Header = () => (
     <View style={styles.headerContainer}>
-      {/* Top Bar */}
       <View style={styles.topBar}>
         <View>
           <Text style={styles.greeting}>Kitchen Desk</Text>
@@ -124,7 +148,6 @@ export default function ChefDashboard() {
         </TouchableOpacity>
       </View>
 
-      {/* Stats Row */}
       <View style={styles.statsRow}>
         <View style={styles.statCardPrimary}>
           <Text style={styles.statLabelLight}>TODAY'S REVENUE</Text>
@@ -136,10 +159,9 @@ export default function ChefDashboard() {
         </View>
       </View>
 
-      {/* List Title */}
       <View style={styles.sectionHeader}>
-        <Ionicons name="list" size={16} color={COLORS.gray} />
-        <Text style={styles.sectionTitle}>ORDERS FEED</Text>
+        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981', marginRight: 6 }} />
+        <Text style={styles.sectionTitle}>LIVE FEED</Text>
       </View>
     </View>
   );
@@ -148,11 +170,10 @@ export default function ChefDashboard() {
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
       <StatusBar style="dark" />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        
         {loading && !refreshing ? (
            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
               <ActivityIndicator size="large" color={COLORS.obsidian} />
-              <Text style={{ textAlign: 'center', marginTop: 10, color: COLORS.gray }}>Loading Kitchen...</Text>
+              <Text style={{ textAlign: 'center', marginTop: 10, color: COLORS.gray }}>Connecting to Kitchen...</Text>
            </View>
         ) : (
           <FlatList
@@ -170,8 +191,7 @@ export default function ChefDashboard() {
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
                 <Ionicons name="receipt-outline" size={50} color={COLORS.border} />
-                <Text style={styles.emptyText}>No orders yet</Text>
-                <Text style={styles.emptySubtext}>Your menu is live. Waiting for students!</Text>
+                <Text style={styles.emptyText}>No active orders</Text>
               </View>
             }
           />
@@ -194,9 +214,8 @@ const styles = StyleSheet.create({
   statLabelDark: { fontSize: 11, fontWeight: '700', color: COLORS.gray, letterSpacing: 0.5 },
   statValueLarge: { fontSize: 26, fontWeight: '800', color: 'white', marginTop: 4 },
   statValueSmall: { fontSize: 26, fontWeight: '800', color: COLORS.obsidian, marginTop: 4 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12, paddingLeft: 4 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, paddingLeft: 4 },
   sectionTitle: { fontSize: 12, fontWeight: '800', color: COLORS.gray, letterSpacing: 1 },
   emptyContainer: { alignItems: 'center', marginTop: 60, opacity: 0.8 },
   emptyText: { fontSize: 18, fontWeight: '700', color: COLORS.gray, marginTop: 10 },
-  emptySubtext: { fontSize: 14, color: COLORS.gray, marginTop: 4 },
 });

@@ -1,198 +1,331 @@
-import { View, Text, FlatList, Image, TouchableOpacity, TextInput, ActivityIndicator, Alert, StatusBar } from 'react-native';
-import { useEffect, useState } from 'react';
-import { supabase } from '../../lib/supabase';
-import { useCart } from '../../lib/store'; 
+import { 
+  View, 
+  Text, 
+  FlatList, 
+  TouchableOpacity, 
+  TextInput, 
+  ActivityIndicator, 
+  Alert, 
+  StatusBar, 
+  Keyboard,
+  Animated,
+  Platform,
+  Image
+} from 'react-native';
+import { useEffect, useState, useRef } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router'; 
-import { useSafeAreaInsets } from 'react-native-safe-area-context'; 
+import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { supabase } from '../../lib/supabase';
+import { useCart } from '../../lib/store';
+import DishCard from '../../components/DishCard'; 
 
-// 🎨 Theme Colors
+// 🎨 Premium Theme Palette
 const COLORS = {
-  background: '#FDFBF7', // Cream
-  surface: '#FFFFFF',
-  obsidian: '#1A0B2E',
-  gold: '#F59E0B',
-  gray: '#94A3B8',
-  red: '#EF4444'
+  background: '#F9FAFB',  
+  surface: '#FFFFFF',     
+  obsidian: '#111827',    
+  primary: '#7E22CE', 
+  secondary: '#F3F4F6',   
+  gray: '#6B7280',        
+  border: '#E5E7EB',
+  green: '#10B981',
+  red: '#EF4444',      
 };
 
+// 🥗 VEG / NON-VEG LOGIC 
+const isVeg = (item) => {
+  if (item.is_veg !== undefined && item.is_veg !== null) return item.is_veg;
+  const text = (item.name + " " + item.description).toLowerCase();
+  const nonVegKeywords = ['chicken', 'egg', 'mutton', 'fish', 'prawn', 'meat', 'beef'];
+  return !nonVegKeywords.some(keyword => text.includes(keyword));
+};
+
+// 🏷️ FILTER CHIP COMPONENT
+const FilterChip = ({ label, icon, isActive, onPress, count }) => (
+  <TouchableOpacity
+    onPress={onPress}
+    activeOpacity={0.7}
+    style={{
+      paddingHorizontal: 14, paddingVertical: 8,
+      borderRadius: 20,
+      backgroundColor: isActive ? COLORS.primary : COLORS.surface, 
+      flexDirection: 'row', alignItems: 'center',
+      marginRight: 10,
+      borderWidth: 1, 
+      borderColor: isActive ? COLORS.primary : COLORS.border,
+      shadowColor: isActive ? COLORS.primary : 'transparent',
+      shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8,
+      elevation: isActive ? 4 : 0
+    }}
+  >
+    {icon && <Ionicons name={icon} size={14} color={isActive ? 'white' : COLORS.gray} style={{ marginRight: 6 }} />}
+    <Text style={{ color: isActive ? 'white' : COLORS.gray, fontWeight: isActive ? '700' : '600', fontSize: 12 }}>
+      {label}
+    </Text>
+    {count !== undefined && (
+      <View style={{ 
+        backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : COLORS.secondary, 
+        paddingHorizontal: 6, paddingVertical: 2, borderRadius: 12, marginLeft: 6 
+      }}>
+        <Text style={{ color: isActive ? 'white' : COLORS.gray, fontSize: 10, fontWeight: '800' }}>{count}</Text>
+      </View>
+    )}
+  </TouchableOpacity>
+);
+
 export default function HomeScreen() {
-  const insets = useSafeAreaInsets(); 
-  const router = useRouter(); 
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const slideUpAnim = useRef(new Animated.Value(100)).current; 
+
   const [menuItems, setMenuItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [category, setCategory] = useState('All');
   
-  // 🛒 Get Actions from Store
-  const { addToCart, cart, getCartTotal, signOut } = useCart(); 
+  const { cart, getCartTotal, signOut } = useCart();
+  const userLocation = { latitude: 16.8302, longitude: 75.7100 };
 
+  useEffect(() => { fetchMenu(); }, []);
+
+  // Animate Cart Entry
   useEffect(() => {
-    fetchMenu();
-  }, []);
+    if (cart.length > 0) {
+      Animated.spring(slideUpAnim, { 
+        toValue: 0, 
+        useNativeDriver: true, 
+        friction: 8, 
+        tension: 40 
+      }).start();
+    } else {
+      Animated.timing(slideUpAnim, { 
+        toValue: 100, 
+        duration: 200, 
+        useNativeDriver: true 
+      }).start();
+    }
+  }, [cart.length]);
 
   async function fetchMenu() {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('menu_items')
-      .select('*, chef_id'); 
-    
-    if (error) {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('menu_items')
+        .select(`*, profiles:chef_id ( latitude, longitude )`);
+        
+      if (error) throw error;
+      setMenuItems(data || []);
+    } catch (error) {
       Alert.alert('Error', error.message);
-    } else {
-      setMenuItems(data);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
-    setLoading(false);
   }
 
-  // Filter Logic
-  const filteredItems = menuItems.filter(item => 
-    item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const filteredItems = menuItems.filter(item => {
+    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          item.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const itemIsVeg = isVeg(item);
+    let matchesCategory = true;
+    if (category === 'Veg') matchesCategory = itemIsVeg;
+    if (category === 'Non-Veg') matchesCategory = !itemIsVeg;
 
-  // 🧮 Calculate Totals for Floating Bar
+    return matchesSearch && matchesCategory;
+  });
+
   const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const cartTotal = getCartTotal();
+  const cartImages = [...new Set(cart.map(item => item.image_url))].slice(0, 3);
 
   const ListHeader = () => (
-    <View style={{ paddingTop: insets.top + 10, paddingHorizontal: 20, paddingBottom: 20, backgroundColor: COLORS.background }}>
-      {/* Location & Logout Row */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <View>
-          <Text style={{ color: COLORS.gray, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>Delivering To</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-            <Ionicons name="location" size={20} color="#E11D48" />
-            <Text style={{ color: COLORS.obsidian, fontSize: 18, fontWeight: '800', marginLeft: 4 }}>Vijayapura</Text>
-          </View>
-        </View>
+    <View style={{ backgroundColor: COLORS.background }}>
+      <View style={{ 
+        backgroundColor: COLORS.surface, 
+        paddingTop: insets.top + 10, paddingBottom: 16, paddingHorizontal: 20,
+        borderBottomLeftRadius: 24, borderBottomRightRadius: 24,
+        shadowColor: '#000', shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.03, shadowRadius: 10,
+        elevation: 5, zIndex: 10
+      }}>
         
-        <TouchableOpacity 
-           onPress={() => {
-             Alert.alert("Log Out", "Are you sure you want to exit?", [
-               { text: "Cancel", style: "cancel" },
-               { text: "Log Out", style: "destructive", onPress: async () => {
-                   await signOut();
-                   router.replace('/login');
-                 }
-               }
-             ]);
-           }}
-           style={{ backgroundColor: 'white', padding: 10, borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0' }}
-        >
-           <Ionicons name="log-out-outline" size={22} color={COLORS.red} />
-        </TouchableOpacity>
+        {/* 📍 Top Row: Location & Profile */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <View>
+             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+                <Ionicons name="location" size={14} color={COLORS.primary} style={{ marginRight: 4 }} />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: COLORS.obsidian, letterSpacing: 0.5 }}>VIJAYAPURA</Text>
+                <Ionicons name="chevron-down" size={12} color={COLORS.gray} style={{ marginLeft: 2 }} />
+             </View>
+             <Text style={{ fontSize: 13, color: COLORS.gray, fontWeight: '500' }}>Station Road, Karnataka</Text>
+          </View>
+          
+          <TouchableOpacity 
+            onPress={() => Alert.alert('Log Out', 'Are you sure?', [{ text: 'Cancel' }, { text: 'Log Out', onPress: async () => { await signOut(); router.replace('/login'); }, style: 'destructive' }])}
+            style={{ 
+                width: 36, height: 36, borderRadius: 18, 
+                backgroundColor: COLORS.secondary, 
+                justifyContent: 'center', alignItems: 'center',
+                borderWidth: 1, borderColor: COLORS.border 
+            }}
+          >
+            <Ionicons name="person" size={18} color={COLORS.obsidian} />
+          </TouchableOpacity>
+        </View>
+
+        {/* 🥘 Hero Section */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <View>
+                <Text style={{ fontSize: 14, color: COLORS.gray, fontWeight: '600', marginBottom: 2 }}>Hungry?</Text>
+                <Text style={{ fontSize: 24, fontWeight: '800', color: COLORS.obsidian, lineHeight: 28 }}>
+                    What's in your{"\n"}
+                    <Text style={{ color: COLORS.primary }}>tiffin today?</Text>
+                </Text>
+            </View>
+            <View style={{ 
+                width: 50, height: 50, borderRadius: 25, 
+                backgroundColor: '#F3E8FF', 
+                justifyContent: 'center', alignItems: 'center',
+                transform: [{ rotate: '-10deg' }]
+            }}>
+                <Text style={{ fontSize: 28 }}>🍱</Text>
+            </View>
+        </View>
+
+        {/* 🔍 Search Bar */}
+        <View style={{ 
+          flexDirection: 'row', alignItems: 'center', 
+          backgroundColor: COLORS.secondary, 
+          borderRadius: 25, 
+          paddingHorizontal: 14, 
+          height: 46, 
+          borderWidth: 1, borderColor: COLORS.border
+        }}>
+          <Ionicons name="search" size={18} color={COLORS.gray} />
+          <TextInput 
+            value={searchQuery} onChangeText={setSearchQuery}
+            placeholder="Search for biryani, paneer..." placeholderTextColor={COLORS.gray}
+            style={{ flex: 1, marginLeft: 8, fontSize: 14, fontWeight: '500', color: COLORS.obsidian, height: '100%' }}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => { setSearchQuery(''); Keyboard.dismiss(); }}>
+               <Ionicons name="close-circle" size={16} color={COLORS.gray} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
-      {/* Hero Title */}
-      <Text style={{ fontSize: 32, fontWeight: '800', color: COLORS.obsidian, lineHeight: 40 }}>
-        What's in your{"\n"}
-        <Text style={{ color: '#E11D48' }}>tiffin today?</Text> 🥘
-      </Text>
-
-      {/* Search Bar */}
-      <View style={{ 
-          flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', 
-          padding: 14, borderRadius: 16, marginTop: 24, borderWidth: 1, borderColor: '#E2E8F0',
-          shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 10, elevation: 2
-      }}>
-        <Ionicons name="search" size={20} color={COLORS.gray} />
-        <TextInput 
-          placeholder="Search for homemade food..." 
-          placeholderTextColor={COLORS.gray}
-          style={{ flex: 1, marginLeft: 10, fontSize: 16, color: COLORS.obsidian, fontWeight: '500' }}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
+      {/* 🥒 FILTERS */}
+      <View style={{ padding: 20, paddingBottom: 10 }}>
+        <View style={{ flexDirection: 'row' }}>
+          <FilterChip label="All" icon="grid" isActive={category === 'All'} onPress={() => setCategory('All')} count={menuItems.length} />
+          <FilterChip label="Veg" icon="leaf" isActive={category === 'Veg'} onPress={() => setCategory('Veg')} count={menuItems.filter(i => isVeg(i)).length} />
+          <FilterChip label="Non-Veg" icon="fish" isActive={category === 'Non-Veg'} onPress={() => setCategory('Non-Veg')} count={menuItems.filter(i => !isVeg(i)).length} />
+        </View>
+        
+        <View style={{ marginTop: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: COLORS.obsidian }}>
+            {category === 'All' ? 'Near You' : category + ' Menu'} 
+            </Text>
+            <View style={{ backgroundColor: COLORS.secondary, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 }}>
+                <Text style={{ fontSize: 11, color: COLORS.gray, fontWeight: '700' }}>{filteredItems.length} ITEMS</Text>
+            </View>
+        </View>
       </View>
     </View>
   );
 
   const renderItem = ({ item }) => (
-    <View style={{ 
-        backgroundColor: 'white', borderRadius: 24, marginBottom: 20, marginHorizontal: 20, 
-        shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 15, elevation: 3,
-        borderWidth: 1, borderColor: '#F1F5F9', overflow: 'hidden'
-    }}>
-      <Image 
-        source={{ uri: item.image_url }} 
-        style={{ width: '100%', height: 180, backgroundColor: '#E2E8F0' }} 
-        resizeMode="cover" 
-      />
-      <View style={{ padding: 20 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <View style={{ flex: 1, marginRight: 10 }}>
-                <Text style={{ fontSize: 20, fontWeight: '800', color: COLORS.obsidian, marginBottom: 4 }}>{item.name}</Text>
-                <Text style={{ color: COLORS.gray, fontSize: 14, lineHeight: 20 }} numberOfLines={2}>{item.description}</Text>
-            </View>
-            <Text style={{ fontSize: 20, fontWeight: '800', color: COLORS.obsidian }}>₹{item.price}</Text>
-        </View>
-        
-        <View style={{ marginTop: 20, flexDirection: 'row', justifyContent: 'flex-end' }}>
-            <TouchableOpacity 
-                onPress={() => addToCart(item)}
-                style={{ 
-                    backgroundColor: COLORS.obsidian, paddingHorizontal: 20, paddingVertical: 12, 
-                    borderRadius: 14, flexDirection: 'row', alignItems: 'center' 
-                }}
-            >
-                <Text style={{ color: '#FDFBF7', fontWeight: '700', marginRight: 8 }}>Add to Tiffin</Text>
-                <Ionicons name="add" size={20} color="#FDFBF7" />
-            </TouchableOpacity>
-        </View>
-      </View>
+    <View style={{ paddingHorizontal: 20 }}>
+        <DishCard dish={item} userLocation={userLocation} />
     </View>
   );
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle="dark-content" backgroundColor={COLORS.surface} />
       
-      {loading ? (
-        <ActivityIndicator size="large" color={COLORS.obsidian} style={{ marginTop: 100 }} />
+      {loading && !refreshing ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+           <ActivityIndicator size="large" color={COLORS.obsidian} />
+        </View>
       ) : (
         <FlatList
           data={filteredItems}
-          keyExtractor={(item) => item.id.toString()}
+          keyExtractor={item => item.id.toString()}
           renderItem={renderItem}
           ListHeaderComponent={ListHeader}
-          contentContainerStyle={{ paddingBottom: 150 }} // Extra padding so list doesn't hide behind floating bar
+          // Dynamic padding to ensure bottom items aren't hidden by the cart bar
+          contentContainerStyle={{ paddingBottom: cart.length > 0 ? 140 : 40 }}
+          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
           showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={{ alignItems: 'center', marginTop: 40, opacity: 0.6 }}>
+                <Ionicons name="fast-food-outline" size={60} color={COLORS.gray} />
+                <Text style={{ marginTop: 16, fontSize: 16, fontWeight: '600', color: COLORS.gray }}>No dishes found</Text>
+            </View>
+          }
         />
       )}
 
-      {/* 🛑 FLOATING CART BAR (Only shows if cart has items) */}
+      {/* 🛒 ZOMATO STYLE FLOATING CART - Only Render if cart.length > 0 */}
       {cart.length > 0 && (
-        <View style={{ 
-            position: 'absolute', bottom: 90, left: 20, right: 20, // Positioned above Tab Bar
-            zIndex: 50 
-        }}>
-          <TouchableOpacity 
-            onPress={() => router.push('/cart')} // 👈 Navigates to Cart Screen
-            style={{ 
-              backgroundColor: COLORS.obsidian, borderRadius: 20, padding: 16,
-              flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-              shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <View style={{ 
-                    backgroundColor: 'rgba(255,255,255,0.2)', width: 40, height: 40, 
-                    borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 12 
-                }}>
-                    <Text style={{ color: 'white', fontWeight: '800', fontSize: 16 }}>{cartItemCount}</Text>
-                </View>
-                <View>
-                    <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '700', textTransform: 'uppercase' }}>Total</Text>
-                    <Text style={{ color: 'white', fontWeight: '800', fontSize: 18 }}>₹{cartTotal}</Text>
-                </View>
-            </View>
+        <Animated.View 
+          style={{ 
+            position: 'absolute', 
+            bottom: insets.bottom > 0 ? insets.bottom : 20, // Responsive bottom positioning
+            left: 16, right: 16, 
+            zIndex: 100,
+            transform: [{ translateY: slideUpAnim }]
+          }}
+        >
+           <TouchableOpacity 
+             onPress={() => router.push('/cart')}
+             activeOpacity={0.9}
+             style={{ 
+               backgroundColor: COLORS.obsidian, 
+               borderRadius: 16, 
+               padding: 14,
+               paddingHorizontal: 16,
+               flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+               shadowColor: "#000", shadowOffset: {width: 0, height: 8}, shadowOpacity: 0.3, shadowRadius: 16, elevation: 12
+             }}
+           >
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                 <View style={{ flexDirection: 'row', marginRight: 12 }}>
+                    {cartImages.map((uri, index) => (
+                      <Image 
+                        key={index} 
+                        source={{ uri: uri || 'https://via.placeholder.com/50' }} 
+                        style={{ 
+                          width: 32, height: 32, borderRadius: 16, 
+                          borderWidth: 2, borderColor: COLORS.obsidian,
+                          marginLeft: index === 0 ? 0 : -14
+                        }} 
+                      />
+                    ))}
+                 </View>
+                 <View>
+                    <Text style={{ color: 'white', fontWeight: '800', fontSize: 16 }}>
+                      {cartItemCount} {cartItemCount === 1 ? 'Item' : 'Items'}
+                    </Text>
+                    <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: '600' }}>
+                      View Cart
+                    </Text>
+                 </View>
+              </View>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Text style={{ color: 'white', fontWeight: '700', fontSize: 16, marginRight: 8 }}>View Cart</Text>
-                <Ionicons name="arrow-forward-circle" size={24} color="white" />
-            </View>
-          </TouchableOpacity>
-        </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                 <View style={{ alignItems: 'flex-end', marginRight: 10 }}>
+                    <Text style={{ color: 'white', fontSize: 18, fontWeight: '800' }}>₹{cartTotal}</Text>
+                 </View>
+                 <Ionicons name="arrow-forward-circle" size={28} color="white" />
+              </View>
+           </TouchableOpacity>
+        </Animated.View>
       )}
     </View>
   );

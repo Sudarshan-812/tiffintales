@@ -1,29 +1,64 @@
-import { View, Text, TouchableOpacity, Alert, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, ActivityIndicator, StyleSheet, Animated, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { supabase } from '../lib/supabase';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+
+// Enable LayoutAnimation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+// 🎨 THEME PALETTE
+const COLORS = {
+  bg: '#FFFFFF',
+  text: '#1F2937',
+  subText: '#6B7280',
+  primary: '#1A0B2E', // Obsidian
+  accent: '#F59E0B', // Gold
+  success: '#10B981',
+  danger: '#EF4444',
+  cooking: '#F97316', // Orange for cooking
+  border: '#E5E7EB',
+  surface: '#F9FAFB'
+};
 
 export default function OrderCard({ order, onUpdate }) {
   const [loading, setLoading] = useState(false);
+  const pulseAnim = useRef(new Animated.Value(1)).current; // For Cooking Pulse
 
-  // 🎨 Status Config (Compact Colors)
+  // 🔄 Pulse Animation for "Cooking" State
+  useEffect(() => {
+    if (order.status === 'cooking') {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 1.1, duration: 800, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+        ])
+      ).start();
+    } else {
+      pulseAnim.setValue(1); // Reset
+    }
+  }, [order.status]);
+
+  // 🏷️ Status Config
   const getStatusConfig = (status) => {
     switch (status) {
       case 'pending':
-        return { color: '#F59E0B', bg: '#FEF3C7', label: 'New', icon: 'hourglass-outline' };
+        return { color: '#B45309', bg: '#FFFBEB', label: 'NEW ORDER', icon: 'notifications' };
       case 'cooking':
-        return { color: '#EA580C', bg: '#FFEDD5', label: 'Cooking', icon: 'flame' };
+        return { color: '#C2410C', bg: '#FFF7ED', label: 'COOKING', icon: 'flame' };
       case 'ready':
-        return { color: '#10B981', bg: '#D1FAE5', label: 'Ready', icon: 'checkmark-circle' };
+        return { color: '#047857', bg: '#ECFDF5', label: 'READY', icon: 'bicycle' };
       default:
-        return { color: '#64748B', bg: '#F1F5F9', label: 'Unknown', icon: 'help-circle-outline' };
+        return { color: '#374151', bg: '#F3F4F6', label: status, icon: 'help' };
     }
   };
 
   const status = getStatusConfig(order.status);
 
+  // ⚡ Update Action
   const updateStatus = async (newStatus) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); // Smooth Transition
     setLoading(true);
     try {
       const { error } = await supabase
@@ -41,212 +76,292 @@ export default function OrderCard({ order, onUpdate }) {
   };
 
   return (
-    <View style={styles.container}>
-      {/* ─── LEFT STRIP (Status Color) ─── */}
-      <View style={[styles.statusStrip, { backgroundColor: status.color }]} />
-
-      <View style={styles.content}>
-        
-        {/* ─── HEADER ROW ─── */}
-        <View style={styles.header}>
+    <View style={styles.card}>
+      
+      {/* ─── 1. HEADER (ID & Time) ─── */}
+      <View style={styles.header}>
+        <View style={styles.orderIdContainer}>
+          <View style={[styles.iconBox, { backgroundColor: status.bg }]}>
+             {/* Animated Icon for Cooking */}
+             {order.status === 'cooking' ? (
+               <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                 <Ionicons name={status.icon} size={18} color={status.color} />
+               </Animated.View>
+             ) : (
+               <Ionicons name={status.icon} size={18} color={status.color} />
+             )}
+          </View>
           <View>
-            <View style={styles.idRow}>
-              <Text style={styles.idText}>#{order.id.slice(0, 5)}</Text>
-              <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
-                <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
-              </View>
-            </View>
-            <Text style={styles.timeText}>
+            <Text style={styles.orderId}>Order #{order.id.toString().slice(-4)}</Text>
+            <Text style={styles.timestamp}>
               {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </Text>
           </View>
+        </View>
+        <View style={styles.priceTag}>
           <Text style={styles.priceText}>₹{order.total_price}</Text>
         </View>
+      </View>
 
-        {/* ─── ITEMS LIST (Compact) ─── */}
-        <View style={styles.itemsContainer}>
-          {order.order_items.map((item, index) => (
-            <View key={index} style={styles.itemRow}>
-              <Text style={styles.qty}>{item.quantity}x</Text>
-              <Text style={styles.itemName} numberOfLines={1}>
-                {item.menu_items?.name || 'Loading Item...'}
-              </Text>
+      <View style={styles.divider} />
+
+      {/* ─── 2. ITEMS LIST ─── */}
+      <View style={styles.itemsContainer}>
+        {order.order_items.map((item, index) => (
+          <View key={index} style={styles.itemRow}>
+            <View style={styles.qtyBox}>
+              <Text style={styles.qtyText}>{item.quantity}x</Text>
             </View>
-          ))}
-        </View>
+            <Text style={styles.itemName} numberOfLines={1}>
+              {item.menu_items?.name || 'Loading Item...'}
+            </Text>
+            <Text style={styles.itemPrice}>₹{item.price * item.quantity}</Text>
+          </View>
+        ))}
+      </View>
 
-        {/* ─── COMPACT ACTIONS ─── */}
-        <View style={styles.actions}>
-          {loading ? (
-            <ActivityIndicator size="small" color="#1A0B2E" />
-          ) : (
-            <>
-              {/* PENDING: Reject (Small) | Cook (Big) */}
-              {order.status === 'pending' && (
-                <>
-                  <TouchableOpacity onPress={() => updateStatus('rejected')} style={styles.btnSmallOutline}>
-                    <Ionicons name="close" size={18} color="#EF4444" />
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => updateStatus('cooking')} style={styles.btnPrimary}>
-                    <Text style={styles.btnText}>Start Cooking</Text>
-                    <Ionicons name="flame" size={16} color="white" style={{ marginLeft: 6 }} />
-                  </TouchableOpacity>
-                </>
-              )}
-
-              {/* COOKING: Mark Ready */}
-              {order.status === 'cooking' && (
-                <TouchableOpacity onPress={() => updateStatus('ready')} style={styles.btnSuccess}>
-                  <Text style={styles.btnText}>Mark Ready</Text>
-                  <Ionicons name="checkmark" size={16} color="white" style={{ marginLeft: 6 }} />
+      {/* ─── 3. ACTION FOOTER ─── */}
+      <View style={styles.footer}>
+        {loading ? (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator color={COLORS.primary} />
+            <Text style={styles.loadingText}>Updating...</Text>
+          </View>
+        ) : (
+          <>
+            {/* STATE: PENDING (Reject / Accept) */}
+            {order.status === 'pending' && (
+              <View style={styles.actionRow}>
+                <TouchableOpacity 
+                  onPress={() => updateStatus('rejected')} 
+                  style={styles.rejectBtn}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.rejectText}>Reject</Text>
                 </TouchableOpacity>
-              )}
 
-              {/* READY: Static Info */}
-              {order.status === 'ready' && (
-                <View style={styles.readyInfo}>
-                  <Ionicons name="bicycle" size={16} color="#10B981" />
-                  <Text style={styles.readyText}>Waiting for Pickup</Text>
-                </View>
-              )}
-            </>
-          )}
-        </View>
+                <TouchableOpacity 
+                  onPress={() => updateStatus('cooking')} 
+                  style={styles.acceptBtn}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.acceptText}>Accept Order</Text>
+                  <Ionicons name="arrow-forward" size={18} color="white" />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* STATE: COOKING (Mark Ready) */}
+            {order.status === 'cooking' && (
+              <TouchableOpacity 
+                onPress={() => updateStatus('ready')} 
+                style={styles.readyBtn}
+                activeOpacity={0.8}
+              >
+                <Animated.View style={{ transform: [{ scale: pulseAnim }], flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name="checkmark-done-circle" size={20} color="white" style={{ marginRight: 8 }} />
+                  <Text style={styles.readyBtnText}>Mark Food Ready</Text>
+                </Animated.View>
+              </TouchableOpacity>
+            )}
+
+            {/* STATE: READY (Waiting) */}
+            {order.status === 'ready' && (
+              <View style={styles.infoBanner}>
+                <Ionicons name="bicycle" size={20} color={COLORS.success} />
+                <Text style={styles.infoText}>Waiting for Pickup</Text>
+              </View>
+            )}
+          </>
+        )}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    marginBottom: 12,
+  card: {
+    backgroundColor: COLORS.bg,
+    borderRadius: 16,
+    marginBottom: 16,
     marginHorizontal: 16,
-    flexDirection: 'row',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-    elevation: 2,
-    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: COLORS.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
+    overflow: 'hidden',
   },
-  statusStrip: {
-    width: 6,
-    height: '100%',
-  },
-  content: {
-    flex: 1,
-    padding: 12,
-  },
+  
+  // Header
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#FAFAFA',
   },
-  idRow: {
+  orderIdContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
   },
-  idText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#1A0B2E',
+  iconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  statusBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  statusText: {
-    fontSize: 10,
+  orderId: {
+    fontSize: 15,
     fontWeight: '700',
-    textTransform: 'uppercase',
+    color: COLORS.text,
+    letterSpacing: 0.5,
   },
-  timeText: {
-    fontSize: 11,
-    color: '#94A3B8',
-    marginTop: 2,
+  timestamp: {
+    fontSize: 12,
+    color: COLORS.subText,
+    fontWeight: '500',
+  },
+  priceTag: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
   priceText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#1A0B2E',
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
   },
+
+  divider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginHorizontal: 16,
+  },
+
+  // Items
   itemsContainer: {
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F8FAFC',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F8FAFC',
-    marginBottom: 10,
+    padding: 16,
   },
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 8,
   },
-  qty: {
-    fontSize: 13,
+  qtyBox: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginRight: 10,
+  },
+  qtyText: {
+    fontSize: 12,
     fontWeight: '700',
-    color: '#64748B',
-    width: 24,
+    color: COLORS.primary,
   },
   itemName: {
-    fontSize: 13,
-    color: '#1E293B',
-    fontWeight: '600',
-  },
-  actions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 8,
-  },
-  btnSmallOutline: {
-    padding: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#EF4444',
-  },
-  btnPrimary: {
-    backgroundColor: '#1A0B2E',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-  },
-  btnSuccess: {
-    backgroundColor: '#10B981',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
     flex: 1,
+    fontSize: 15,
+    color: COLORS.text,
+    fontWeight: '500',
+  },
+  itemPrice: {
+    fontSize: 14,
+    color: COLORS.subText,
+    fontWeight: '500',
+  },
+
+  // Footer Actions
+  footer: {
+    padding: 16,
+    paddingTop: 0,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  rejectBtn: {
+    flex: 0.35,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    backgroundColor: '#FEF2F2',
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  btnText: {
-    color: 'white',
-    fontSize: 13,
+  rejectText: {
+    color: COLORS.danger,
     fontWeight: '700',
+    fontSize: 14,
   },
-  readyInfo: {
+  acceptBtn: {
+    flex: 0.65,
+    backgroundColor: COLORS.success,
+    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
     gap: 6,
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+    shadowColor: COLORS.success,
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
-  readyText: {
-    fontSize: 12,
-    color: '#059669',
-    fontWeight: '600',
+  acceptText: {
+    color: 'white',
+    fontWeight: '700',
+    fontSize: 14,
   },
+  readyBtn: {
+    backgroundColor: COLORS.cooking,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: COLORS.cooking,
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  readyBtnText: {
+    color: 'white',
+    fontWeight: '800',
+    fontSize: 15,
+    letterSpacing: 0.5,
+  },
+  infoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F0FDFA',
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+    gap: 8,
+  },
+  infoText: {
+    color: '#0F766E',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  loadingBox: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 10,
+    gap: 10,
+  },
+  loadingText: {
+    color: COLORS.subText,
+    fontSize: 14,
+  }
 });
