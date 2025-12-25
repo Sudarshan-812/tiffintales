@@ -2,7 +2,6 @@ import {
   View, 
   Text, 
   FlatList, 
-  Image, 
   TouchableOpacity, 
   ScrollView, 
   StyleSheet, 
@@ -10,7 +9,7 @@ import {
   Alert,
   ActivityIndicator 
 } from 'react-native';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,12 +26,13 @@ const COLORS = {
   green: '#10B981',
   red: '#EF4444',
   border: '#E5E7EB',
-  gold: '#F59E0B',
 };
 
 export default function CartScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  
+  // 🛒 Get Cart Actions
   const { cart, addToCart, removeFromCart, clearCart, getCartTotal } = useCart();
   
   const [loading, setLoading] = useState(false);
@@ -51,25 +51,26 @@ export default function CartScreen() {
     setLoading(true);
 
     try {
+      // 1. Check User Session
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not logged in');
+      if (!user) throw new Error('Please log in to place an order.');
 
-      // 1. Create Order
+      // 2. Create Order (Instructions Enabled ✅)
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .insert([{
           user_id: user.id,
-          chef_id: cart[0].chef_id, // Assuming all items from same chef for MVP
+          chef_id: cart[0].chef_id, // Assumes 1 chef per order
           total_price: grandTotal,
           status: 'pending',
-          instruction: instruction
+          instruction: instruction // 👈 UNCOMMENTED: Saves the note!
         }])
         .select()
         .single();
 
       if (orderError) throw orderError;
 
-      // 2. Create Order Items
+      // 3. Create Order Items
       const orderItems = cart.map(item => ({
         order_id: orderData.id,
         menu_item_id: item.id,
@@ -83,7 +84,7 @@ export default function CartScreen() {
 
       if (itemsError) throw itemsError;
 
-      // 3. Success
+      // 4. Success
       clearCart();
       Alert.alert("Order Placed! 🥘", "Your tiffin is being prepared.", [
         { text: "Track Order", onPress: () => router.replace('/(tabs)/orders') }
@@ -103,12 +104,10 @@ export default function CartScreen() {
     </View>
   );
 
-  // 🥪 Cart Item Row
   const renderItem = ({ item }) => {
-    const isVegetarian = item.is_veg !== false; // Default to true if undefined
+    const isVegetarian = item.is_veg !== false; 
     return (
       <View style={styles.itemRow}>
-        {/* Name & Indicator */}
         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'flex-start' }}>
            <VegIndicator isVeg={isVegetarian} />
            <View style={{ marginLeft: 8 }}>
@@ -117,7 +116,6 @@ export default function CartScreen() {
            </View>
         </View>
 
-        {/* Counter */}
         <View style={styles.counterContainer}>
            <TouchableOpacity onPress={() => removeFromCart(item.id)} style={styles.counterBtn}>
               <Ionicons name="remove" size={16} color={COLORS.green} />
@@ -128,7 +126,6 @@ export default function CartScreen() {
            </TouchableOpacity>
         </View>
 
-        {/* Final Price */}
         <Text style={styles.rowTotal}>₹{item.price * item.quantity}</Text>
       </View>
     );
@@ -191,33 +188,12 @@ export default function CartScreen() {
         {/* 🧾 Bill Details */}
         <View style={styles.section}>
            <Text style={styles.sectionTitle}>Bill Details</Text>
-           
-           <View style={styles.billRow}>
-              <Text style={styles.billLabel}>Item Total</Text>
-              <Text style={styles.billValue}>₹{itemTotal}</Text>
-           </View>
-           
-           <View style={styles.billRow}>
-              <Text style={styles.billLabel}>Delivery Fee</Text>
-              <Text style={styles.billValue}>₹{deliveryFee}</Text>
-           </View>
-
-           <View style={styles.billRow}>
-              <Text style={styles.billLabel}>Platform Fee</Text>
-              <Text style={styles.billValue}>₹{platformFee}</Text>
-           </View>
-
-           <View style={styles.billRow}>
-              <Text style={styles.billLabel}>GST (5%)</Text>
-              <Text style={styles.billValue}>₹{gst}</Text>
-           </View>
-
+           <View style={styles.billRow}><Text style={styles.billLabel}>Item Total</Text><Text style={styles.billValue}>₹{itemTotal}</Text></View>
+           <View style={styles.billRow}><Text style={styles.billLabel}>Delivery Fee</Text><Text style={styles.billValue}>₹{deliveryFee}</Text></View>
+           <View style={styles.billRow}><Text style={styles.billLabel}>Platform Fee</Text><Text style={styles.billValue}>₹{platformFee}</Text></View>
+           <View style={styles.billRow}><Text style={styles.billLabel}>GST (5%)</Text><Text style={styles.billValue}>₹{gst}</Text></View>
            <View style={styles.divider} />
-
-           <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>To Pay</Text>
-              <Text style={styles.totalValue}>₹{grandTotal}</Text>
-           </View>
+           <View style={styles.totalRow}><Text style={styles.totalLabel}>To Pay</Text><Text style={styles.totalValue}>₹{grandTotal}</Text></View>
         </View>
 
         {/* 🛡️ Trust Badge */}
@@ -235,18 +211,14 @@ export default function CartScreen() {
             <Text style={styles.footerLink}>View Bill</Text>
          </View>
 
-         <TouchableOpacity 
-            onPress={handleCheckout} 
-            disabled={loading}
-            style={styles.payBtn}
-         >
+         <TouchableOpacity onPress={handleCheckout} disabled={loading} style={styles.payBtn}>
             {loading ? (
-               <ActivityIndicator color="white" />
+              <ActivityIndicator color="white" />
             ) : (
-               <>
-                 <Text style={styles.payText}>Place Order</Text>
-                 <Ionicons name="arrow-forward" size={20} color="white" />
-               </>
+              <>
+                <Text style={styles.payText}>Place Order</Text>
+                <Ionicons name="arrow-forward" size={20} color="white" />
+              </>
             )}
          </TouchableOpacity>
       </View>
@@ -256,56 +228,22 @@ export default function CartScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  
-  // Header
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingBottom: 16, backgroundColor: COLORS.surface,
-    borderBottomWidth: 1, borderBottomColor: COLORS.border,
-  },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 16, backgroundColor: COLORS.surface, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   headerTitle: { fontSize: 18, fontWeight: '800', color: COLORS.obsidian },
   backBtn: { padding: 8, borderRadius: 12, backgroundColor: COLORS.lightGray },
-
-  // Sections
-  section: {
-    backgroundColor: COLORS.surface,
-    marginTop: 12,
-    padding: 20,
-    borderRadius: 16,
-    marginHorizontal: 16,
-    shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 10, elevation: 2,
-  },
+  section: { backgroundColor: COLORS.surface, marginTop: 12, padding: 20, borderRadius: 16, marginHorizontal: 16, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 10, elevation: 2 },
   sectionTitle: { fontSize: 14, fontWeight: '800', color: COLORS.obsidian, marginBottom: 12, letterSpacing: 0.5 },
-
-  // Items
   itemRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
   itemName: { fontSize: 16, fontWeight: '700', color: COLORS.obsidian },
   itemPrice: { fontSize: 12, fontWeight: '500', color: COLORS.gray, marginTop: 2 },
   rowTotal: { fontSize: 14, fontWeight: '700', color: COLORS.obsidian, width: 50, textAlign: 'right' },
-  
-  // Veg Indicator
   vegBox: { width: 16, height: 16, borderWidth: 1, borderRadius: 4, justifyContent: 'center', alignItems: 'center', marginTop: 3 },
   vegDot: { width: 8, height: 8, borderRadius: 4 },
-
-  // Counter
-  counterContainer: { 
-    flexDirection: 'row', alignItems: 'center', 
-    backgroundColor: '#ECFDF5', 
-    borderRadius: 8, borderWidth: 1, borderColor: '#D1FAE5',
-    paddingVertical: 4, paddingHorizontal: 4
-  },
+  counterContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ECFDF5', borderRadius: 8, borderWidth: 1, borderColor: '#D1FAE5', paddingVertical: 4, paddingHorizontal: 4 },
   counterBtn: { padding: 4 },
   counterText: { fontSize: 14, fontWeight: '800', color: COLORS.green, marginHorizontal: 8 },
-
-  // Inputs
-  inputBox: { 
-    flexDirection: 'row', alignItems: 'center', 
-    backgroundColor: COLORS.background, borderRadius: 12, 
-    borderWidth: 1, borderColor: COLORS.border, paddingHorizontal: 12 
-  },
+  inputBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.background, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, paddingHorizontal: 12 },
   input: { flex: 1, paddingVertical: 12, color: COLORS.obsidian, fontSize: 14 },
-
-  // Bill
   billRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   billLabel: { fontSize: 14, color: COLORS.gray },
   billValue: { fontSize: 14, color: COLORS.obsidian, fontWeight: '500' },
@@ -313,36 +251,14 @@ const styles = StyleSheet.create({
   totalRow: { flexDirection: 'row', justifyContent: 'space-between' },
   totalLabel: { fontSize: 18, fontWeight: '800', color: COLORS.obsidian },
   totalValue: { fontSize: 18, fontWeight: '800', color: COLORS.obsidian },
-
-  // Trust
-  trustBadge: { 
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', 
-    marginTop: 24, backgroundColor: '#ECFDF5', padding: 12, borderRadius: 12, marginHorizontal: 16
-  },
+  trustBadge: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 24, backgroundColor: '#ECFDF5', padding: 12, borderRadius: 12, marginHorizontal: 16 },
   trustText: { color: COLORS.green, fontWeight: '700', marginLeft: 8, fontSize: 12 },
-
-  // Footer
-  footer: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    backgroundColor: COLORS.surface,
-    padding: 20, paddingTop: 16,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    borderTopWidth: 1, borderTopColor: COLORS.border,
-    shadowColor: '#000', shadowOffset: {width: 0, height: -4}, shadowOpacity: 0.05, shadowRadius: 10, elevation: 10
-  },
+  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: COLORS.surface, padding: 20, paddingTop: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: COLORS.border, shadowColor: '#000', shadowOffset: {width: 0, height: -4}, shadowOpacity: 0.05, shadowRadius: 10, elevation: 10 },
   footerInfo: { justifyContent: 'center' },
   footerTotal: { fontSize: 20, fontWeight: '800', color: COLORS.obsidian },
   footerLink: { fontSize: 12, fontWeight: '700', color: COLORS.green },
-  
-  payBtn: {
-    backgroundColor: COLORS.obsidian,
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 32, paddingVertical: 14, borderRadius: 16,
-    shadowColor: COLORS.obsidian, shadowOpacity: 0.3, shadowOffset: {width: 0, height: 4}, elevation: 5
-  },
+  payBtn: { backgroundColor: COLORS.obsidian, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 32, paddingVertical: 14, borderRadius: 16, shadowColor: COLORS.obsidian, shadowOpacity: 0.3, shadowOffset: {width: 0, height: 4}, elevation: 5 },
   payText: { color: 'white', fontWeight: '800', fontSize: 16, marginRight: 8 },
-
-  // Empty State
   emptyCircle: { width: 120, height: 120, borderRadius: 60, backgroundColor: COLORS.lightGray, justifyContent: 'center', alignItems: 'center', marginBottom: 24 },
   emptyTitle: { fontSize: 22, fontWeight: '800', color: COLORS.obsidian, marginBottom: 8 },
   emptySubtitle: { fontSize: 16, color: COLORS.gray, marginBottom: 32, textAlign: 'center' },

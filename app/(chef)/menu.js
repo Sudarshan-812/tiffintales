@@ -1,23 +1,21 @@
 import { 
   View, 
   Text, 
-  TextInput, 
+  FlatList, 
   TouchableOpacity, 
   Image, 
-  ScrollView, 
+  StyleSheet, 
   Alert, 
-  ActivityIndicator, 
-  StyleSheet,
-  Keyboard,
-  Animated 
+  ActivityIndicator,
+  RefreshControl,
+  Animated,
+  TouchableWithoutFeedback
 } from 'react-native';
-import { useState, useRef } from 'react';
-import * as ImagePicker from 'expo-image-picker';
+import { useState, useCallback, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
-import { generateDishDescription } from '../../lib/gemini';
-import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // 🎨 BRAND THEME
 const COLORS = {
@@ -28,300 +26,279 @@ const COLORS = {
   grayDark: '#64748B',
   border: '#E2E8F0',
   error: '#EF4444',
-  aiPrimary: '#8B5CF6', // 🟣 Gemini Purple
-  aiLight: '#F5F3FF',   // 🟣 Light Purple Bg
+  success: '#10B981',
+  primary: '#7E22CE', // Purple
 };
 
-// 🛠️ HELPER: Decode Base64
-const decodeBase64 = (base64) => {
-  const binaryString = atob(base64);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes.buffer;
-};
-
-export default function AddDishScreen() {
+export default function ChefMenuScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [name, setName] = useState('');
-  const [price, setPrice] = useState('');
-  const [desc, setDesc] = useState('');
-  const [image, setImage] = useState(null);
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   
-  const [uploading, setUploading] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [errors, setErrors] = useState({ name: '', price: '', image: '' });
+  // 🔘 FAB Animation State
+  const [menuOpen, setMenuOpen] = useState(false);
+  const animation = useRef(new Animated.Value(0)).current;
 
-  // Animation for AI Glow
-  const glowAnim = useRef(new Animated.Value(0)).current;
+  // 🔄 Fetch Data
+  useFocusEffect(
+    useCallback(() => {
+      fetchMenu();
+    }, [])
+  );
 
-  const pickImage = async () => {
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.4,
-      base64: true,
-    });
-
-    if (!result.canceled) {
-      setImage(result.assets[0]);
-      setErrors({ ...errors, image: '' });
-    }
-  };
-
-  // ✨ AI HANDLER
-  const handleAIGenerate = async () => {
-    if (!name.trim()) {
-      Alert.alert("Name Missing", "Tell me the Dish Name first! 🍳");
-      return;
-    }
-    
-    Keyboard.dismiss();
-    setIsGenerating(true);
-    
-    // Start Pulse Animation
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(glowAnim, { toValue: 1, duration: 800, useNativeDriver: false }),
-        Animated.timing(glowAnim, { toValue: 0.3, duration: 800, useNativeDriver: false })
-      ])
-    ).start();
-    
-    // Call Gemini
-    const aiText = await generateDishDescription(name);
-    
-    setIsGenerating(false);
-    glowAnim.stopAnimation();
-    glowAnim.setValue(0); // Reset
-
-    if (aiText) {
-      setDesc(aiText);
-    } else {
-      Alert.alert("AI Error", "Could not generate description.");
-    }
-  };
-
-  const handleSubmit = async () => {
-    // Validation Logic
-    let newErrors = {};
-    if (!name.trim()) newErrors.name = 'Required';
-    if (!price.trim()) newErrors.price = 'Required';
-    if (!image) newErrors.image = 'Required';
-    
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
-
-    setUploading(true);
+  const fetchMenu = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const fileName = `${user.id}/${Date.now()}.jpg`;
+      if (!user) return;
 
-      // 1. Upload Image
-      const { error: uploadError } = await supabase.storage
-        .from('dish-images')
-        .upload(fileName, decodeBase64(image.base64), { contentType: 'image/jpeg', upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('dish-images')
-        .getPublicUrl(fileName);
-
-      // 2. Insert into DB
-      const { error: dbError } = await supabase
+      const { data, error } = await supabase
         .from('menu_items')
-        .insert([{
-          chef_id: user.id,
-          name: name.trim(),
-          price: parseFloat(price),
-          description: desc.trim(),
-          image_url: publicUrl,
-        }]);
+        .select('*')
+        .eq('chef_id', user.id)
+        .order('created_at', { ascending: false });
 
-      if (dbError) throw dbError;
-
-      Alert.alert('Success! 🎉', 'Dish added to menu.');
-      router.back();
+      if (error) throw error;
+      setItems(data || []);
     } catch (error) {
-      Alert.alert('Error', error.message);
+      console.error(error);
+      Alert.alert('Error', 'Could not load menu.');
     } finally {
-      setUploading(false);
+      setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  // Dynamic Border Color for AI Box
-  const borderColor = glowAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [COLORS.border, COLORS.aiPrimary]
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchMenu();
+  };
+
+  const handleDelete = (id, name) => {
+    Alert.alert(
+      'Delete Dish', 
+      `Are you sure you want to remove "${name}" from your menu?`, 
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive', 
+          onPress: async () => {
+            const { error } = await supabase.from('menu_items').delete().eq('id', id);
+            if (error) Alert.alert('Error', error.message);
+            else fetchMenu(); 
+          }
+        }
+      ]
+    );
+  };
+
+  // 🪄 Toggle FAB Menu
+  const toggleMenu = () => {
+    const toValue = menuOpen ? 0 : 1;
+    Animated.spring(animation, {
+      toValue,
+      friction: 6,
+      useNativeDriver: true,
+    }).start();
+    setMenuOpen(!menuOpen);
+  };
+
+  const rotation = {
+    transform: [
+      {
+        rotate: animation.interpolate({
+          inputRange: [0, 1],
+          outputRange: ['0deg', '45deg'],
+        }),
+      },
+    ],
+  };
+
+  const opacity = animation.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0, 0, 1],
   });
 
-  return (
-    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-      <SafeAreaView style={{ flex: 1 }}>
-        
-        {/* HEADER */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={24} color={COLORS.obsidian} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Add New Dish</Text>
-          <View style={{ width: 40 }} />
-        </View>
+  // 🥘 Dish Card
+  const renderItem = ({ item }) => {
+    // 🟢 FIX: Default to VEG if null (Treats null or true as Veg, only strict false is Non-Veg)
+    const isVeg = item.is_veg !== false; 
 
-        <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
-          
-          {/* 📸 IMAGE PICKER */}
-          <Text style={styles.sectionLabel}>DISH PHOTO</Text>
-          <TouchableOpacity onPress={pickImage} activeOpacity={0.8} style={styles.imagePicker}>
-            {image ? (
-              <>
-                <Image source={{ uri: image.uri }} style={styles.previewImage} />
-                <View style={styles.editBadge}>
-                  <Ionicons name="pencil" size={14} color="white" />
-                </View>
-              </>
-            ) : (
-              <View style={styles.placeholder}>
-                <Ionicons name="camera" size={32} color={COLORS.gray} />
-                <Text style={styles.placeholderText}>Tap to upload</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-          {errors.image && <Text style={styles.errorText}>Photo is required</Text>}
-
-          {/* 📝 FORM */}
-          <View style={{ gap: 20, marginTop: 24 }}>
-            
-            {/* Name */}
-            <View>
-              <Text style={styles.label}>DISH NAME</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. Paneer Tikka Masala"
-                value={name}
-                onChangeText={setName}
-              />
-              {errors.name && <Text style={styles.errorText}>Name is required</Text>}
-            </View>
-
-            {/* Price */}
-            <View>
-              <Text style={styles.label}>PRICE (₹)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="0.00"
-                keyboardType="decimal-pad"
-                value={price}
-                onChangeText={setPrice}
-              />
-              {errors.price && <Text style={styles.errorText}>Price is required</Text>}
-            </View>
-
-            {/* ✨ MAGICAL AI DESCRIPTION BOX */}
-            <View>
-              <View style={styles.aiHeaderRow}>
-                <Text style={styles.label}>DESCRIPTION</Text>
-                
-                {/* MAGIC BUTTON */}
-                <TouchableOpacity 
-                  onPress={handleAIGenerate}
-                  disabled={isGenerating}
-                  style={styles.magicButton}
-                >
-                  {isGenerating ? (
-                    <ActivityIndicator size="small" color="white" />
-                  ) : (
-                    <>
-                      <Ionicons name="sparkles" size={12} color="white" style={{ marginRight: 6 }} />
-                      <Text style={styles.magicButtonText}>Auto-Write</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              {/* ANIMATED INPUT BOX */}
-              <Animated.View style={[styles.aiInputContainer, { borderColor: isGenerating ? borderColor : COLORS.border }]}> 
-                {isGenerating ? (
-                  <View style={styles.generatingOverlay}>
-                    <Text style={styles.generatingText}>✨ Gemini is writing...</Text>
-                  </View>
-                ) : null}
-
-                <TextInput
-                  style={styles.aiTextArea}
-                  placeholder="Describe ingredients, taste, or just let AI do it..."
-                  placeholderTextColor={COLORS.gray}
-                  multiline
-                  numberOfLines={6}
-                  value={desc}
-                  onChangeText={setDesc}
-                  maxLength={250}
-                />
-                
-                {/* AI Badge inside box */}
-                <View style={styles.aiBadge}>
-                  <Ionicons name="logo-google" size={10} color={COLORS.grayDark} />
-                  <Text style={styles.aiBadgeText}>Powered by Gemini 2.5</Text>
-                </View>
-              </Animated.View>
-            </View>
-
+    return (
+      <View style={styles.card}>
+        <Image 
+          source={{ uri: item.image_url || 'https://via.placeholder.com/150' }} 
+          style={styles.image} 
+        />
+        <View style={styles.content}>
+          <View style={styles.row}>
+            <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
+            <TouchableOpacity onPress={() => handleDelete(item.id, item.name)} style={styles.deleteBtn}>
+              <Ionicons name="trash-outline" size={18} color={COLORS.error} />
+            </TouchableOpacity>
           </View>
+          <Text style={styles.desc} numberOfLines={2}>
+            {item.description || 'No description provided.'}
+          </Text>
+          <View style={styles.footer}>
+            <Text style={styles.price}>₹{item.price}</Text>
+            
+            {/* 🟢 Veg/Non-Veg Badge with Fix */}
+            <View style={[styles.badge, { backgroundColor: isVeg ? '#ECFDF5' : '#FEF2F2' }]}>
+              <View style={[styles.dot, { backgroundColor: isVeg ? COLORS.success : COLORS.error }]} />
+              <Text style={[styles.badgeText, { color: isVeg ? COLORS.success : COLORS.error }]}>
+                {isVeg ? 'VEG' : 'NON-VEG'}
+              </Text>
+            </View>
+          </View>
+        </View>
+      </View>
+    );
+  };
 
-          {/* SUBMIT BUTTON */}
+  return (
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      
+      {/* HEADER */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.title}>My Kitchen Menu 📜</Text>
+          <Text style={styles.subtitle}>{items.length} dishes active</Text>
+        </View>
+      </View>
+
+      {/* LIST */}
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+        </View>
+      ) : (
+        <FlatList 
+          data={items}
+          keyExtractor={i => i.id.toString()}
+          renderItem={renderItem}
+          contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIconBg}>
+                <Ionicons name="fast-food-outline" size={48} color={COLORS.gray} />
+              </View>
+              <Text style={styles.emptyTitle}>Your Menu is Empty</Text>
+              <Text style={styles.emptyText}>Tap the + button to add your first delicious dish!</Text>
+            </View>
+          }
+        />
+      )}
+
+      {/* 🪄 FLOATING ACTION BUTTON (FAB) & MENU */}
+      
+      {/* White Overlay */}
+      {menuOpen && (
+        <TouchableWithoutFeedback onPress={toggleMenu}>
+          <View style={styles.overlay} />
+        </TouchableWithoutFeedback>
+      )}
+
+      <View style={styles.fabContainer}>
+        {/* Menu Items (Pop out) */}
+        <Animated.View style={[styles.menuItemsContainer, { opacity, transform: [{ scale: animation }] }]}>
+          
           <TouchableOpacity 
-            onPress={handleSubmit} 
-            disabled={uploading}
-            style={[styles.submitBtn, { opacity: uploading ? 0.7 : 1 }]}
+            style={styles.menuItem} 
+            onPress={() => { toggleMenu(); router.push('/(chef)/add'); }}
           >
-            {uploading ? (
-               <ActivityIndicator color="white" />
-            ) : (
-               <Text style={styles.submitText}>Add to Menu</Text>
-            )}
+            <View style={[styles.menuIconBg, { backgroundColor: '#F3E8FF' }]}>
+               <Ionicons name="sparkles" size={20} color={COLORS.primary} />
+            </View>
+            <Text style={styles.menuLabel}>AI Quick Add</Text>
           </TouchableOpacity>
 
-        </ScrollView>
-      </SafeAreaView>
+          <TouchableOpacity 
+            style={styles.menuItem} 
+            onPress={() => { toggleMenu(); router.push('/(chef)/add'); }}
+          >
+            <View style={[styles.menuIconBg, { backgroundColor: '#F1F5F9' }]}>
+               <Ionicons name="create" size={20} color={COLORS.obsidian} />
+            </View>
+            <Text style={styles.menuLabel}>Manual Entry</Text>
+          </TouchableOpacity>
+
+        </Animated.View>
+
+        {/* Main FAB Button */}
+        <TouchableWithoutFeedback onPress={toggleMenu}>
+          <Animated.View style={[styles.fab, rotation]}>
+            <Ionicons name="add" size={32} color="white" />
+          </Animated.View>
+        </TouchableWithoutFeedback>
+      </View>
+
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12 },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: COLORS.obsidian },
-  backBtn: { padding: 8, borderRadius: 12, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border },
+  container: { flex: 1, backgroundColor: COLORS.background },
   
-  sectionLabel: { fontSize: 12, fontWeight: '800', color: COLORS.grayDark, marginBottom: 8, letterSpacing: 1 },
-  label: { fontSize: 12, fontWeight: '700', color: COLORS.obsidian, marginBottom: 6, letterSpacing: 0.5 },
+  header: { 
+    paddingHorizontal: 24, 
+    paddingVertical: 16,
+    backgroundColor: COLORS.background,
+  },
+  title: { fontSize: 24, fontWeight: '800', color: COLORS.obsidian },
+  subtitle: { fontSize: 13, color: COLORS.grayDark, fontWeight: '600', marginTop: 2 },
   
-  imagePicker: { height: 200, borderRadius: 16, backgroundColor: '#F1F5F9', overflow: 'hidden', justifyContent: 'center', alignItems: 'center', borderStyle: 'dashed', borderWidth: 2, borderColor: COLORS.border },
-  previewImage: { width: '100%', height: '100%' },
-  placeholder: { alignItems: 'center' },
-  placeholderText: { marginTop: 8, color: COLORS.gray, fontWeight: '600' },
-  editBadge: { position: 'absolute', bottom: 10, right: 10, backgroundColor: COLORS.obsidian, padding: 8, borderRadius: 20 },
-  
-  input: { backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 14, fontSize: 16, fontWeight: '500', color: COLORS.obsidian },
-  errorText: { color: COLORS.error, fontSize: 11, marginTop: 4, fontWeight: '600' },
+  // Card
+  card: { 
+    flexDirection: 'row', 
+    backgroundColor: COLORS.surface, 
+    borderRadius: 20, 
+    padding: 12, 
+    marginBottom: 16, 
+    shadowColor: '#000', 
+    shadowOpacity: 0.03, 
+    shadowRadius: 12, 
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: COLORS.border
+  },
+  image: { width: 90, height: 90, borderRadius: 14, backgroundColor: '#F1F5F9' },
+  content: { flex: 1, marginLeft: 14, justifyContent: 'space-between' },
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  name: { fontSize: 16, fontWeight: '700', color: COLORS.obsidian, flex: 1, marginRight: 8 },
+  deleteBtn: { padding: 4 },
+  desc: { fontSize: 12, color: COLORS.gray, lineHeight: 16, marginTop: 4 },
+  footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 },
+  price: { fontSize: 16, fontWeight: '800', color: COLORS.obsidian },
+  badge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  dot: { width: 6, height: 6, borderRadius: 3, marginRight: 6 },
+  badgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
 
-  // ✨ AI STYLES
-  aiHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  magicButton: { backgroundColor: COLORS.aiPrimary, flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20, shadowColor: COLORS.aiPrimary, shadowOpacity: 0.3, shadowRadius: 4, elevation: 3 },
-  magicButtonText: { color: 'white', fontSize: 12, fontWeight: '700' },
-  
-  aiInputContainer: { backgroundColor: COLORS.surface, borderWidth: 2, borderRadius: 16, overflow: 'hidden', position: 'relative', minHeight: 140 }, // Bigger Box
-  aiTextArea: { padding: 16, fontSize: 16, lineHeight: 24, color: COLORS.obsidian, textAlignVertical: 'top', height: 140 },
-  
-  generatingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.8)', justifyContent: 'center', alignItems: 'center', zIndex: 10 },
-  generatingText: { marginTop: 8, color: COLORS.aiPrimary, fontWeight: '700' },
-  
-  aiBadge: { position: 'absolute', bottom: 8, right: 12, flexDirection: 'row', alignItems: 'center', opacity: 0.6 },
-  aiBadgeText: { fontSize: 10, color: COLORS.grayDark, marginLeft: 4, fontWeight: '600' },
+  // Empty State
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  emptyState: { alignItems: 'center', marginTop: 60, paddingHorizontal: 40 },
+  emptyIconBg: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
+  emptyTitle: { fontSize: 20, fontWeight: '800', color: COLORS.obsidian, marginBottom: 8 },
+  emptyText: { textAlign: 'center', color: COLORS.gray, fontSize: 14, lineHeight: 22 },
 
-  submitBtn: { marginTop: 40, backgroundColor: COLORS.obsidian, height: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10 },
-  submitText: { color: 'white', fontSize: 16, fontWeight: '700' },
+  // 🪄 FAB STYLES
+  fabContainer: { position: 'absolute', bottom: 30, right: 30, alignItems: 'center' },
+  fab: {
+    width: 60, height: 60, borderRadius: 30,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center', alignItems: 'center',
+    shadowColor: COLORS.primary, shadowOpacity: 0.4, shadowOffset: { width: 0, height: 8 }, shadowRadius: 16, elevation: 8
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    zIndex: 1
+  },
+  menuItemsContainer: { position: 'absolute', bottom: 80, right: 0, alignItems: 'flex-end', gap: 16, zIndex: 2 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface, padding: 8, paddingHorizontal: 16, borderRadius: 16, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, elevation: 4, marginBottom: 12 },
+  menuIconBg: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  menuLabel: { fontSize: 14, fontWeight: '700', color: COLORS.obsidian }
 });

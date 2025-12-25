@@ -15,7 +15,7 @@ import { useRouter } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context'; // 👈 Notch Fix
+import { SafeAreaView } from 'react-native-safe-area-context'; 
 
 const { width } = Dimensions.get('window');
 
@@ -72,7 +72,10 @@ export default function LoginScreen() {
       if (mode === 'signup') {
         // --- SIGN UP ---
         const { data: { user }, error } = await supabase.auth.signUp({
-          email, password
+          email, password,
+          options: {
+            data: { role: isChef ? 'chef' : 'student' } // Save role in metadata too
+          }
         });
         if (error) throw error;
 
@@ -80,8 +83,8 @@ export default function LoginScreen() {
           // Create Profile with selected Role
           await supabase.from('profiles').insert([{
             id: user.id,
-            role: isChef ? 'chef' : 'customer',
-            phone: ''
+            email: user.email,
+            role: isChef ? 'chef' : 'student' // 'student' matches your DB constraint likely
           }]);
           
           Alert.alert('Welcome', 'Account created successfully!');
@@ -100,8 +103,12 @@ export default function LoginScreen() {
         });
         if (error) throw error;
         
-        // 🔀 Redirect based on selected toggle (or you could fetch profile here)
-        if (isChef) {
+        // Check role after login to redirect correctly
+        const { data: { user } } = await supabase.auth.getUser();
+        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+        const role = profile?.role || (isChef ? 'chef' : 'student'); // Fallback to toggle if profile fetch fails
+
+        if (role === 'chef') {
            router.replace('/(chef)');
         } else {
            router.replace('/(tabs)');
@@ -325,7 +332,7 @@ export default function LoginScreen() {
             {/* ─── FOOTER ─── */}
             <View style={{marginTop: SPACING.xl, marginBottom: SPACING.xl}}>
                <Text style={{textAlign: 'center', fontSize: 11, color: COLORS.grayLight}}>
-                  By continuing, you agree to our Terms & Privacy Policy.
+                 By continuing, you agree to our Terms & Privacy Policy.
                </Text>
             </View>
 
