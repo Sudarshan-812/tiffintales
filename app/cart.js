@@ -15,8 +15,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCart } from '../lib/store';
 import { supabase } from '../lib/supabase';
+import PaymentModal from '../components/PaymentModal';
 
-// 🎨 Premium Theme
 const COLORS = {
   background: '#F9FAFB',
   surface: '#FFFFFF',
@@ -32,37 +32,35 @@ export default function CartScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   
-  // 🛒 Get Cart Actions (Added getDeliveryFee)
-  const { 
-    cart, 
-    addToCart, 
-    removeFromCart, 
-    clearCart, 
-    getCartTotal, 
-    getDeliveryFee // 👈 Import this!
-  } = useCart();
+  const { cart, addToCart, removeFromCart, clearCart, getCartTotal, getDeliveryFee } = useCart();
   
   const [loading, setLoading] = useState(false);
   const [instruction, setInstruction] = useState('');
+  const [showPayment, setShowPayment] = useState(false);
 
   // 💰 Bill Calculation
   const itemTotal = getCartTotal();
-  const deliveryFee = getDeliveryFee(); // 👈 Now Dynamic (₹10/km)
+  const deliveryFee = getDeliveryFee(); 
   const platformFee = itemTotal > 0 ? 5 : 0;
-  const gst = Math.round(itemTotal * 0.05); // 5% GST
+  const gst = Math.round(itemTotal * 0.05); 
   const grandTotal = itemTotal + deliveryFee + platformFee + gst;
 
-  // 🛍️ Checkout Logic
-  const handleCheckout = async () => {
+  // 🛍️ Trigger Modal
+  const initiateCheckout = async () => {
     if (cart.length === 0) return;
-    setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+        Alert.alert('Log In Required', 'Please log in to place an order.');
+        return;
+    }
+    setShowPayment(true);
+  };
 
+  // ✅ 1. Payment Confirmed (DB Insert ONLY, Returns Boolean)
+  const handlePaymentConfirm = async () => {
     try {
-      // 1. Check User Session
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Please log in to place an order.');
-
-      // 2. Create Order
+      
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .insert([{
@@ -77,7 +75,6 @@ export default function CartScreen() {
 
       if (orderError) throw orderError;
 
-      // 3. Create Order Items
       const orderItems = cart.map(item => ({
         order_id: orderData.id,
         menu_item_id: item.id,
@@ -85,26 +82,25 @@ export default function CartScreen() {
         price: item.price
       }));
 
-      const { error: itemsError } = await supabase
-        .from('order_items')
-        .insert(orderItems);
-
+      const { error: itemsError } = await supabase.from('order_items').insert(orderItems);
       if (itemsError) throw itemsError;
 
-      // 4. Success
-      clearCart();
-      Alert.alert("Order Placed! 🥘", "Your tiffin is being prepared.", [
-        { text: "Track Order", onPress: () => router.replace('/(tabs)/orders') }
-      ]);
+      // ⚠️ DO NOT CLEAR CART HERE! 
+      return true; // 🟢 Tells Modal to show Success Screen
 
     } catch (error) {
-      Alert.alert('Checkout Failed', error.message);
-    } finally {
-      setLoading(false);
+      Alert.alert('Order Failed', error.message);
+      return false; 
     }
   };
 
-  // 🟢 Veg/Non-Veg Indicator Component
+  // ✅ 2. Finish & Navigate (Called by Track Order Button)
+  const finishOrder = () => {
+    setShowPayment(false); 
+    clearCart();           
+    router.replace('/(tabs)/orders'); 
+  };
+
   const VegIndicator = ({ isVeg }) => (
     <View style={[styles.vegBox, { borderColor: isVeg ? COLORS.green : COLORS.red }]}>
       <View style={[styles.vegDot, { backgroundColor: isVeg ? COLORS.green : COLORS.red }]} />
@@ -138,7 +134,6 @@ export default function CartScreen() {
     );
   };
 
-  // 🛑 Empty State
   if (cart.length === 0) {
     return (
       <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
@@ -156,7 +151,6 @@ export default function CartScreen() {
 
   return (
     <View style={styles.container}>
-      {/* 🏡 Header */}
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
            <Ionicons name="arrow-back" size={24} color={COLORS.obsidian} />
@@ -166,8 +160,6 @@ export default function CartScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-        
-        {/* 📦 Items List */}
         <View style={styles.section}>
            <FlatList
              data={cart}
@@ -177,7 +169,6 @@ export default function CartScreen() {
            />
         </View>
 
-        {/* 📝 Instructions */}
         <View style={styles.section}>
            <Text style={styles.sectionTitle}>Cooking Instructions</Text>
            <View style={styles.inputBox}>
@@ -192,7 +183,6 @@ export default function CartScreen() {
            </View>
         </View>
 
-        {/* 🧾 Bill Details */}
         <View style={styles.section}>
            <Text style={styles.sectionTitle}>Bill Details</Text>
            <View style={styles.billRow}><Text style={styles.billLabel}>Item Total</Text><Text style={styles.billValue}>₹{itemTotal}</Text></View>
@@ -203,32 +193,37 @@ export default function CartScreen() {
            <View style={styles.totalRow}><Text style={styles.totalLabel}>To Pay</Text><Text style={styles.totalValue}>₹{grandTotal}</Text></View>
         </View>
 
-        {/* 🛡️ Trust Badge */}
         <View style={styles.trustBadge}>
            <Ionicons name="shield-checkmark" size={16} color={COLORS.green} />
            <Text style={styles.trustText}>Safe & Hygienic Delivery</Text>
         </View>
-
       </ScrollView>
 
-      {/* 💸 Footer Payment Button */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 20 }]}>
          <View style={styles.footerInfo}>
             <Text style={styles.footerTotal}>₹{grandTotal}</Text>
             <Text style={styles.footerLink}>View Bill</Text>
          </View>
 
-         <TouchableOpacity onPress={handleCheckout} disabled={loading} style={styles.payBtn}>
+         <TouchableOpacity onPress={initiateCheckout} disabled={loading} style={styles.payBtn}>
             {loading ? (
               <ActivityIndicator color="white" />
             ) : (
               <>
-                <Text style={styles.payText}>Place Order</Text>
+                <Text style={styles.payText}>Pay Now</Text>
                 <Ionicons name="arrow-forward" size={20} color="white" />
               </>
             )}
          </TouchableOpacity>
       </View>
+
+      <PaymentModal 
+        visible={showPayment}
+        amount={grandTotal}
+        onClose={() => setShowPayment(false)}
+        onConfirmPayment={handlePaymentConfirm}
+        onFinish={finishOrder}
+      />
     </View>
   );
 }
