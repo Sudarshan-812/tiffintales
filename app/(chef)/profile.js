@@ -16,15 +16,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // 👇 Import Location Helper
 import { getCurrentLocation } from '../../lib/location';
 
-// 🎨 Premium Obsidian + Cream Theme
 const COLORS = {
-  background: '#FDFBF7',      // Cream Background
-  surface: '#FFFFFF',         // White Card
-  obsidian: '#111827',        // Main Dark Color
-  primary: '#7E22CE',         // Purple Accent
-  primaryLight: '#F3E8FF',    // Light Purple
-  text: '#1F293B',            // Dark Gray Text
-  subtext: '#64748B',         // Light Gray Text
+  background: '#F8FAFC',
+  surface: '#FFFFFF',
+  primary: '#7E22CE',
+  primaryLight: '#F3E8FF',
+  text: '#1E293B',
+  subtext: '#64748B',
   border: '#E2E8F0',
   red: '#EF4444',
   redLight: '#FEF2F2',
@@ -58,20 +56,17 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = async () => {
-    Alert.alert("Log Out", "Are you sure you want to sign out?", [
+    Alert.alert("Log Out", "Are you sure?", [
       { text: "Cancel", style: "cancel" },
-      { 
-        text: "Log Out", 
-        style: "destructive", 
-        onPress: async () => {
+      { text: "Log Out", style: "destructive", onPress: async () => {
           await supabase.auth.signOut();
-          router.replace('/welcome'); // ✅ Redirects to Welcome Screen
+          router.replace('/welcome'); // Go to Welcome Screen
         }
       }
     ]);
   };
 
-  // 📍 Update Kitchen Location (Chef Only)
+  // 📍 NEW: Update Kitchen Location (Chef Only)
   const updateLocation = async () => {
     setLoading(true);
     try {
@@ -98,7 +93,6 @@ export default function ProfileScreen() {
     }
   };
 
-  // 🔘 Reusable Menu Item
   const MenuItem = ({ icon, color, bg, label, subtext, onPress, hasSwitch, isDestructive }) => (
     <TouchableOpacity 
       onPress={onPress} 
@@ -128,32 +122,31 @@ export default function ProfileScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      
       <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
         
-        {/* 👤 Header Profile */}
+        {/* 👤 Header */}
         <View style={styles.profileHeader}>
           <View style={styles.avatarContainer}>
              <Text style={styles.avatarText}>{profile?.email?.[0].toUpperCase() || 'U'}</Text>
              {profile?.role === 'chef' && (
                <View style={styles.chefBadge}>
-                 <Text style={{fontSize: 12}}>👨‍🍳</Text>
+                 <Text style={{fontSize: 10}}>👨‍🍳</Text>
                </View>
              )}
           </View>
-          <Text style={styles.userName}>{profile?.full_name || 'Foodie User'}</Text>
+          <Text style={styles.userName}>{profile?.full_name || 'User'}</Text>
           <Text style={styles.userHandle}>{profile?.email}</Text>
           
-          {/* Chef Location Tag */}
+          {/* Chef Location Badge */}
           {profile?.role === 'chef' && profile?.latitude && (
             <View style={styles.locationTag}>
-               <Ionicons name="location" size={12} color={COLORS.primary} />
-               <Text style={styles.locationText}>Kitchen Location Active</Text>
+               <Ionicons name="location" size={10} color={COLORS.primary} />
+               <Text style={styles.locationText}>Kitchen Location Set</Text>
             </View>
           )}
         </View>
 
-        {/* 📊 Quick Stats */}
+        {/* 📊 Stats */}
         <View style={styles.statsRow}>
            <View style={styles.statItem}>
               <Text style={styles.statValue}>{profile?.role === 'chef' ? '24' : '12'}</Text>
@@ -166,7 +159,7 @@ export default function ProfileScreen() {
            </View>
         </View>
 
-        {/* 🚨 CHEF ONLY: Kitchen Settings */}
+        {/* 🚨 CHEF ONLY SECTION */}
         {profile?.role === 'chef' && (
           <View style={styles.sectionContainer}>
             <Text style={styles.sectionTitle}>KITCHEN SETTINGS</Text>
@@ -174,7 +167,7 @@ export default function ProfileScreen() {
                <MenuItem 
                   icon="navigate-circle" color={COLORS.orange} bg={COLORS.orangeLight} 
                   label={loading ? "Updating GPS..." : "Update Kitchen Location"} 
-                  subtext="Set current location for delivery calculations"
+                  subtext="Set current location for delivery calc"
                   onPress={updateLocation}
                />
             </View>
@@ -192,24 +185,13 @@ export default function ProfileScreen() {
              />
              <View style={styles.divider} />
              <MenuItem 
-                icon="location" color={COLORS.primary} bg={COLORS.primaryLight} 
-                label="Saved Addresses" subtext="Manage delivery locations" 
+                icon="settings" color={COLORS.primary} bg={COLORS.primaryLight} 
+                label="App Settings" subtext="Notifications, Language" 
              />
           </View>
         </View>
 
-        {/* ⚙️ Preferences */}
-        <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>PREFERENCES</Text>
-          <View style={styles.sectionCard}>
-             <MenuItem 
-                icon="notifications" color={COLORS.obsidian} bg="#F3F4F6" 
-                label="Notifications" hasSwitch={true} 
-             />
-          </View>
-        </View>
-
-        {/* ⚠️ Logout Section */}
+        {/* Logout */}
         <View style={styles.sectionContainer}>
            <View style={styles.sectionCard}>
              <MenuItem 
@@ -220,10 +202,6 @@ export default function ProfileScreen() {
            </View>
         </View>
 
-        <View style={{ alignItems: 'center', marginTop: 20 }}>
-           <Text style={styles.versionText}>TiffinTales v1.0.2 • Made with ❤️</Text>
-        </View>
-
       </ScrollView>
     </View>
   );
@@ -231,59 +209,33 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-
-  // Profile Header
   profileHeader: { alignItems: 'center', marginTop: 20, marginBottom: 24 },
   avatarContainer: {
-    width: 90, height: 90, borderRadius: 45,
-    backgroundColor: COLORS.primaryLight,
-    justifyContent: 'center', alignItems: 'center',
-    marginBottom: 16,
-    borderWidth: 3, borderColor: COLORS.surface,
-    shadowColor: COLORS.primary, shadowOpacity: 0.2, shadowRadius: 10, shadowOffset: {width:0, height:4}, elevation: 5
+    width: 90, height: 90, borderRadius: 45, backgroundColor: COLORS.primaryLight,
+    justifyContent: 'center', alignItems: 'center', marginBottom: 12,
+    borderWidth: 3, borderColor: COLORS.surface, elevation: 5
   },
   avatarText: { fontSize: 36, fontWeight: '800', color: COLORS.primary },
-  chefBadge: {
-    position: 'absolute', bottom: 0, right: 0,
-    backgroundColor: COLORS.surface, padding: 6, borderRadius: 12,
-    elevation: 4, shadowColor: '#000', shadowOpacity: 0.1
-  },
-  userName: { fontSize: 22, fontWeight: '800', color: COLORS.text, letterSpacing: -0.5 },
+  chefBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: 'white', borderRadius: 10, padding: 4, elevation: 2 },
+  userName: { fontSize: 22, fontWeight: '800', color: COLORS.text },
   userHandle: { fontSize: 14, color: COLORS.subtext, marginTop: 2 },
   
-  locationTag: { 
-    flexDirection: 'row', alignItems: 'center', 
-    backgroundColor: '#F0FDF4', paddingHorizontal: 10, paddingVertical: 4, 
-    borderRadius: 12, marginTop: 12, borderWidth: 1, borderColor: '#DCFCE7' 
-  },
-  locationText: { fontSize: 11, fontWeight: '700', color: '#16A34A', marginLeft: 4 },
+  locationTag: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0FDF4', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, marginTop: 8, borderWidth: 1, borderColor: '#DCFCE7' },
+  locationText: { fontSize: 10, fontWeight: '700', color: '#16A34A', marginLeft: 4 },
 
-  // Stats Row
-  statsRow: {
-    flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center',
-    backgroundColor: COLORS.surface, marginHorizontal: 20, paddingVertical: 20, borderRadius: 20,
-    shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 10, elevation: 3, marginBottom: 30,
-    borderWidth: 1, borderColor: COLORS.border
-  },
+  statsRow: { flexDirection: 'row', justifyContent: 'space-evenly', backgroundColor: COLORS.surface, marginHorizontal: 20, paddingVertical: 16, borderRadius: 16, marginBottom: 30, elevation: 2 },
   statItem: { alignItems: 'center', width: '40%' },
-  statValue: { fontSize: 20, fontWeight: '800', color: COLORS.text },
-  statLabel: { fontSize: 11, fontWeight: '600', color: COLORS.subtext, marginTop: 4, letterSpacing: 0.5 },
-  vertDivider: { width: 1, height: 30, backgroundColor: COLORS.border },
+  statValue: { fontSize: 18, fontWeight: '800', color: COLORS.text },
+  statLabel: { fontSize: 11, fontWeight: '600', color: COLORS.subtext, marginTop: 2 },
+  vertDivider: { width: 1, height: 24, backgroundColor: COLORS.border },
 
-  // Sections
   sectionContainer: { marginBottom: 24, paddingHorizontal: 20 },
-  sectionTitle: { fontSize: 11, fontWeight: '800', color: COLORS.subtext, marginBottom: 10, marginLeft: 8, letterSpacing: 1 },
-  sectionCard: {
-    backgroundColor: COLORS.surface, borderRadius: 18,
-    borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden'
-  },
+  sectionTitle: { fontSize: 11, fontWeight: '800', color: COLORS.subtext, marginBottom: 8, marginLeft: 8, letterSpacing: 1 },
+  sectionCard: { backgroundColor: COLORS.surface, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden' },
   
-  // Menu Items
-  menuItem: { flexDirection: 'row', alignItems: 'center', padding: 18 },
-  iconBox: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  menuItem: { flexDirection: 'row', alignItems: 'center', padding: 16, paddingVertical: 18 },
+  iconBox: { width: 38, height: 38, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   menuLabel: { fontSize: 15, fontWeight: '600', color: COLORS.text },
   menuSubtext: { fontSize: 12, color: COLORS.subtext, marginTop: 2 },
-  
-  divider: { height: 1, backgroundColor: COLORS.border, marginLeft: 74 }, 
-  versionText: { fontSize: 12, color: COLORS.subtext, opacity: 0.6 }
+  divider: { height: 1, backgroundColor: COLORS.border, marginLeft: 70 },
 });
