@@ -32,15 +32,22 @@ export default function CartScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   
-  // 🛒 Get Cart Actions
-  const { cart, addToCart, removeFromCart, clearCart, getCartTotal } = useCart();
+  // 🛒 Get Cart Actions (Added getDeliveryFee)
+  const { 
+    cart, 
+    addToCart, 
+    removeFromCart, 
+    clearCart, 
+    getCartTotal, 
+    getDeliveryFee // 👈 Import this!
+  } = useCart();
   
   const [loading, setLoading] = useState(false);
   const [instruction, setInstruction] = useState('');
 
   // 💰 Bill Calculation
   const itemTotal = getCartTotal();
-  const deliveryFee = itemTotal > 0 ? 40 : 0;
+  const deliveryFee = getDeliveryFee(); // 👈 Now Dynamic (₹10/km)
   const platformFee = itemTotal > 0 ? 5 : 0;
   const gst = Math.round(itemTotal * 0.05); // 5% GST
   const grandTotal = itemTotal + deliveryFee + platformFee + gst;
@@ -55,15 +62,15 @@ export default function CartScreen() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Please log in to place an order.');
 
-      // 2. Create Order (Instructions Enabled ✅)
+      // 2. Create Order
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .insert([{
           user_id: user.id,
-          chef_id: cart[0].chef_id, // Assumes 1 chef per order
+          chef_id: cart[0].chef_id, 
           total_price: grandTotal,
           status: 'pending',
-          instruction: instruction // 👈 UNCOMMENTED: Saves the note!
+          instruction: instruction 
         }])
         .select()
         .single();

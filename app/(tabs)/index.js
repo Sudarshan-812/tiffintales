@@ -9,7 +9,6 @@ import {
   StatusBar, 
   Keyboard,
   Animated,
-  Platform,
   Image
 } from 'react-native';
 import { useEffect, useState, useRef } from 'react';
@@ -19,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { useCart } from '../../lib/store';
 import DishCard from '../../components/DishCard'; 
+import { getCurrentLocation } from '../../lib/location';
 
 // 🎨 Premium Theme Palette
 const COLORS = {
@@ -30,7 +30,7 @@ const COLORS = {
   gray: '#6B7280',        
   border: '#E5E7EB',
   green: '#10B981',
-  red: '#EF4444',      
+  red: '#EF4444',       
 };
 
 // 🥗 VEG / NON-VEG LOGIC 
@@ -86,10 +86,15 @@ export default function HomeScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [category, setCategory] = useState('All');
   
-  const { cart, getCartTotal, signOut } = useCart();
-  const userLocation = { latitude: 16.8302, longitude: 75.7100 };
+  // 👇 Get setUserLocation from store
+  const { cart, getCartTotal, signOut, setUserLocation } = useCart();
+  
+  const [userPosition, setUserPosition] = useState(null);
+  const [locationStatus, setLocationStatus] = useState('Locating...');
 
-  useEffect(() => { fetchMenu(); }, []);
+  useEffect(() => { 
+    initializeData(); 
+  }, []);
 
   // Animate Cart Entry
   useEffect(() => {
@@ -109,15 +114,32 @@ export default function HomeScreen() {
     }
   }, [cart.length]);
 
-  async function fetchMenu() {
+  async function initializeData() {
+    setLoading(true);
     try {
-      setLoading(true);
+      // A. Get GPS
+      try {
+        const coords = await getCurrentLocation();
+        if (coords) {
+          setUserPosition(coords);
+          setUserLocation(coords); // 👈 SAVE TO STORE FOR CART CALCULATION
+          setLocationStatus('Current Location');
+        } else {
+          setLocationStatus('Location Denied');
+        }
+      } catch (e) {
+        console.log("GPS Error", e);
+        setLocationStatus('Vijayapura (Default)');
+      }
+
+      // B. Fetch Menu
       const { data, error } = await supabase
         .from('menu_items')
         .select(`*, profiles:chef_id ( latitude, longitude )`);
         
       if (error) throw error;
       setMenuItems(data || []);
+
     } catch (error) {
       Alert.alert('Error', error.message);
     } finally {
@@ -160,7 +182,7 @@ export default function HomeScreen() {
                 <Text style={{ fontSize: 12, fontWeight: '700', color: COLORS.obsidian, letterSpacing: 0.5 }}>VIJAYAPURA</Text>
                 <Ionicons name="chevron-down" size={12} color={COLORS.gray} style={{ marginLeft: 2 }} />
              </View>
-             <Text style={{ fontSize: 13, color: COLORS.gray, fontWeight: '500' }}>Station Road, Karnataka</Text>
+             <Text style={{ fontSize: 13, color: COLORS.gray, fontWeight: '500' }}>{locationStatus}</Text>
           </View>
           
           <TouchableOpacity 
@@ -240,7 +262,7 @@ export default function HomeScreen() {
 
   const renderItem = ({ item }) => (
     <View style={{ paddingHorizontal: 20 }}>
-        <DishCard dish={item} userLocation={userLocation} />
+        <DishCard dish={item} userLocation={userPosition} />
     </View>
   );
 
@@ -258,7 +280,6 @@ export default function HomeScreen() {
           keyExtractor={item => item.id.toString()}
           renderItem={renderItem}
           ListHeaderComponent={ListHeader}
-          // Dynamic padding to ensure bottom items aren't hidden by the cart bar
           contentContainerStyle={{ paddingBottom: cart.length > 0 ? 140 : 40 }}
           onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
           showsVerticalScrollIndicator={false}
@@ -271,12 +292,12 @@ export default function HomeScreen() {
         />
       )}
 
-      {/* 🛒 ZOMATO STYLE FLOATING CART - Only Render if cart.length > 0 */}
+      {/* 🛒 ZOMATO STYLE FLOATING CART */}
       {cart.length > 0 && (
         <Animated.View 
           style={{ 
             position: 'absolute', 
-            bottom: insets.bottom > 0 ? insets.bottom : 20, // Responsive bottom positioning
+            bottom: insets.bottom > 0 ? insets.bottom : 20, 
             left: 16, right: 16, 
             zIndex: 100,
             transform: [{ translateY: slideUpAnim }]
