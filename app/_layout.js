@@ -1,22 +1,27 @@
 import { Stack } from 'expo-router';
-import { useEffect } from 'react';
-import { useCart } from '../lib/store'; // Import your store
+import { useState } from 'react';
 import { View } from 'react-native';
+import AnimatedSplash from '../components/AnimatedSplash'; // 👈 Import it
 
 export default function RootLayout() {
-  // 👇 Get the checkSession function from your store
-  const checkSession = useCart((state) => state.checkSession);
+  const [appReady, setAppReady] = useState(false);
 
-  useEffect(() => {
-    // 👇 Run this immediately when the app starts
-    checkSession();
-  }, []);
+  // 1. If App is NOT ready, show Splash
+  if (!appReady) {
+    return (
+      <AnimatedSplash 
+        onFinish={() => setAppReady(true)} // 👈 When animation ends, set appReady = true
+      />
+    );
+  }
 
+  // 2. Once Ready, Show the Actual App
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="login" options={{ headerShown: false }} />
-      <Stack.Screen name="cart" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="index" />
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="welcome" />
+      <Stack.Screen name="login" />
     </Stack>
   );
 }
