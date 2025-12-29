@@ -1,50 +1,121 @@
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  Alert, 
-  ActivityIndicator, 
-  KeyboardAvoidingView, 
-  Platform, 
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Alert,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
-  Dimensions,
-  Image // 👈 Ensure Image is imported
+  Image,
+  StyleSheet
 } from 'react-native';
-import { useState } from 'react';
+
+// Third-party Imports
 import { useRouter } from 'expo-router';
-import { supabase } from '../lib/supabase';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context'; 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const { height } = Dimensions.get('window');
+// Local Imports
+import { supabase } from '../lib/supabase';
 
-// 🎨 OBSIDIAN + CREAM THEME
+// Theme Constants
 const COLORS = {
-  background: '#FDFBF7',      // Cream Background
-  surface: '#FFFFFF',         // White Card
-  obsidian: '#111827',        // Main Dark Color
-  primary: '#7E22CE',         // Purple Accent
-  primaryLight: '#F3E8FF',    // Light Purple
-  gray: '#6B7280',            // Gray Text
-  border: '#E5E7EB',          // Light Border
-  error: '#EF4444',           // Red Error
+  background: '#FDFBF7',
+  surface: '#FFFFFF',
+  obsidian: '#111827',
+  primary: '#7E22CE',
+  primaryLight: '#F3E8FF',
+  gray: '#6B7280',
+  border: '#E5E7EB',
+  error: '#EF4444',
 };
+
+/**
+ * Reusable Input Component for Email/Password
+ */
+const AuthInput = ({ 
+  icon, 
+  placeholder, 
+  value, 
+  onChangeText, 
+  secureTextEntry, 
+  isPassword, 
+  togglePasswordVisibility, 
+  error 
+}) => (
+  <View>
+    <View style={[styles.inputContainer, error ? { borderColor: COLORS.error } : null]}>
+      <Ionicons name={icon} size={20} color={COLORS.gray} style={styles.inputIcon} />
+      <TextInput
+        placeholder={placeholder}
+        placeholderTextColor={COLORS.gray}
+        value={value}
+        onChangeText={onChangeText}
+        autoCapitalize="none"
+        secureTextEntry={secureTextEntry}
+        style={styles.inputField}
+      />
+      {isPassword && (
+        <TouchableOpacity onPress={togglePasswordVisibility} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Ionicons name={secureTextEntry ? 'eye-off-outline' : 'eye-outline'} size={20} color={COLORS.gray} />
+        </TouchableOpacity>
+      )}
+    </View>
+    {error ? <Text style={styles.errorText}>{error}</Text> : null}
+  </View>
+);
+
+/**
+ * Component to toggle between Student and Chef roles
+ */
+const RoleSelector = ({ isChef, setIsChef }) => (
+  <View style={styles.roleContainer}>
+    {['student', 'chef'].map((role) => {
+      const active = (role === 'chef' && isChef) || (role === 'student' && !isChef);
+      return (
+        <TouchableOpacity
+          key={role}
+          onPress={() => setIsChef(role === 'chef')}
+          style={[
+            styles.roleButton,
+            active ? styles.roleButtonActive : styles.roleButtonInactive
+          ]}
+        >
+          <Ionicons
+            name={role === 'chef' ? 'restaurant-outline' : 'school-outline'}
+            size={18}
+            color={active ? 'white' : COLORS.gray}
+            style={styles.roleIcon}
+          />
+          <Text style={[styles.roleText, { color: active ? 'white' : COLORS.gray }]}>
+            {role === 'chef' ? 'Home Chef' : 'Student'}
+          </Text>
+        </TouchableOpacity>
+      );
+    })}
+  </View>
+);
 
 export default function LoginScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  
+
+  // State
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [isChef, setIsChef] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [mode, setMode] = useState('login');
+  const [mode, setMode] = useState('login'); // 'login' | 'signup'
   const [errors, setErrors] = useState({ email: '', password: '' });
 
-  // 🧪 VALIDATION
+  /**
+   * Validates email format and password length.
+   */
   const validateForm = () => {
     let valid = true;
     let newErrors = { email: '', password: '' };
@@ -64,51 +135,56 @@ export default function LoginScreen() {
     return valid;
   };
 
-  // 🔐 AUTH LOGIC
+  /**
+   * Handles Login and Signup logic using Supabase.
+   */
   async function handleAuth() {
     if (!validateForm()) return;
     setLoading(true);
 
     try {
       if (mode === 'signup') {
+        // 1. Sign Up
         const { data: { user }, error } = await supabase.auth.signUp({
-          email, password,
+          email,
+          password,
           options: {
             data: { role: isChef ? 'chef' : 'student' }
           }
         });
         if (error) throw error;
 
+        // 2. Create Profile
         if (user) {
           await supabase.from('profiles').insert([{
             id: user.id,
             email: user.email,
             role: isChef ? 'chef' : 'student'
           }]);
-          
+
           Alert.alert('Welcome', 'Account created successfully!');
-          
-          if (isChef) {
-            router.replace('/(chef)');
-          } else {
-            router.replace('/(tabs)');
-          }
+          router.replace(isChef ? '/(chef)' : '/(tabs)');
         }
       } else {
+        // 1. Sign In
         const { error } = await supabase.auth.signInWithPassword({
-          email, password
+          email,
+          password
         });
         if (error) throw error;
-        
+
+        // 2. Check Role
         const { data: { user } } = await supabase.auth.getUser();
-        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+        
+        // Default to mode selection if profile role is missing (safety fallback)
         const role = profile?.role || (isChef ? 'chef' : 'student');
 
-        if (role === 'chef') {
-          router.replace('/(chef)');
-        } else {
-          router.replace('/(tabs)');
-        }
+        router.replace(role === 'chef' ? '/(chef)' : '/(tabs)');
       }
     } catch (error) {
       Alert.alert('Error', error.message);
@@ -118,226 +194,119 @@ export default function LoginScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+    <View style={styles.container}>
       <StatusBar style="dark" />
-      
-      {/* 🟢 Top Header Area */}
-      <View style={{ paddingTop: insets.top + 10, paddingBottom: 20, alignItems: 'center', justifyContent: 'center' }}>
-         <Text style={{ fontSize: 20, fontWeight: '900', color: COLORS.obsidian, letterSpacing: -1 }}>
-            Tiffin<Text style={{ color: COLORS.primary }}>Tales</Text>
-         </Text>
+
+      {/* Top Header Area */}
+      <View style={[styles.topHeader, { paddingTop: insets.top + 10 }]}>
+        <Text style={styles.appTitle}>
+          Tiffin<Text style={{ color: COLORS.primary }}>Tales</Text>
+        </Text>
       </View>
 
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
+        style={styles.keyboardView}
       >
-        <View style={{ 
-          flex: 1, 
-          backgroundColor: COLORS.surface,
-          borderTopLeftRadius: 32,
-          borderTopRightRadius: 32,
-          shadowColor: '#000',
-          shadowOpacity: 0.05,
-          shadowRadius: 10,
-          shadowOffset: { height: -5, width: 0 },
-          elevation: 5,
-          overflow: 'hidden'
-        }}>
-          <ScrollView 
-            contentContainerStyle={{ 
-              paddingHorizontal: 24,
-              paddingTop: 40, 
-              paddingBottom: 40
-            }}
+        <View style={styles.bottomSheet}>
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
-            
+
             {/* ─── HEADER WITH LOGO ─── */}
-            <View style={{ alignItems: 'center', marginBottom: 32 }}>
-              
-              {/* 👇 REPLACED ICON WITH LOGO IMAGE */}
-              <View style={{ 
-                width: 80, height: 80, borderRadius: 24,
-                backgroundColor: '#FFF',
-                justifyContent: 'center', alignItems: 'center',
-                marginBottom: 16,
-                borderWidth: 1, borderColor: COLORS.border,
-                shadowColor: COLORS.primary, shadowOpacity: 0.1, shadowRadius: 10, elevation: 5
-              }}>
-                <Image 
+            <View style={styles.headerContainer}>
+              <View style={styles.logoBox}>
+                <Image
                   source={require('../assets/loginlogo.png')}
-                  style={{ width: 60, height: 60, borderRadius: 12 }}
+                  style={styles.logoImage}
                   resizeMode="contain"
                 />
               </View>
-              
-              <Text style={{ 
-                fontSize: 26, 
-                fontWeight: '800', 
-                color: COLORS.obsidian,
-                letterSpacing: -0.5,
-                marginBottom: 6
-              }}>
+
+              <Text style={styles.welcomeTitle}>
                 {mode === 'login' ? 'Welcome Back' : 'Get Started'}
               </Text>
-              <Text style={{ 
-                color: COLORS.gray, 
-                fontSize: 15, 
-                fontWeight: '500',
-                letterSpacing: 0.2
-              }}>
+              <Text style={styles.welcomeSubtitle}>
                 {mode === 'login' ? 'Enter details to login.' : 'Create your free account.'}
               </Text>
             </View>
 
             {/* ─── INPUTS ─── */}
-            <View style={{ gap: 16, marginBottom: 24 }}>
-              
-              {/* Email */}
-              <View>
-                <View style={{ 
-                  flexDirection: 'row', alignItems: 'center',
-                  backgroundColor: COLORS.background,
-                  borderRadius: 14, height: 56,
-                  paddingHorizontal: 16,
-                  borderWidth: 1, borderColor: errors.email ? COLORS.error : COLORS.border
-                }}>
-                  <Ionicons name="mail-outline" size={20} color={COLORS.gray} style={{ marginRight: 12 }} />
-                  <TextInput
-                    placeholder="Email Address"
-                    placeholderTextColor={COLORS.gray}
-                    value={email}
-                    onChangeText={(text) => {
-                      setEmail(text);
-                      if (errors.email) setErrors({ ...errors, email: '' });
-                    }}
-                    autoCapitalize="none"
-                    style={{ flex: 1, color: COLORS.obsidian, fontSize: 16, fontWeight: '600' }}
-                  />
-                </View>
-                {errors.email && <Text style={{ color: COLORS.error, fontSize: 12, marginTop: 4, marginLeft: 4 }}>{errors.email}</Text>}
-              </View>
+            <View style={styles.formContainer}>
+              <AuthInput
+                icon="mail-outline"
+                placeholder="Email Address"
+                value={email}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  if (errors.email) setErrors({ ...errors, email: '' });
+                }}
+                error={errors.email}
+              />
 
-              {/* Password */}
-              <View>
-                <View style={{ 
-                  flexDirection: 'row', alignItems: 'center',
-                  backgroundColor: COLORS.background,
-                  borderRadius: 14, height: 56,
-                  paddingHorizontal: 16,
-                  borderWidth: 1, borderColor: errors.password ? COLORS.error : COLORS.border
-                }}>
-                  <Ionicons name="lock-closed-outline" size={20} color={COLORS.gray} style={{ marginRight: 12 }} />
-                  <TextInput
-                    placeholder="Password"
-                    placeholderTextColor={COLORS.gray}
-                    value={password}
-                    onChangeText={(text) => {
-                      setPassword(text);
-                      if (errors.password) setErrors({ ...errors, password: '' });
-                    }}
-                    secureTextEntry={!showPassword}
-                    style={{ flex: 1, color: COLORS.obsidian, fontSize: 16, fontWeight: '600' }}
-                  />
-                  <TouchableOpacity onPress={() => setShowPassword(!showPassword)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                    <Ionicons name={showPassword ? 'eye-outline' : 'eye-off-outline'} size={20} color={COLORS.gray} />
-                  </TouchableOpacity>
-                </View>
-                {errors.password && <Text style={{ color: COLORS.error, fontSize: 12, marginTop: 4, marginLeft: 4 }}>{errors.password}</Text>}
-              </View>
+              <AuthInput
+                icon="lock-closed-outline"
+                placeholder="Password"
+                value={password}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  if (errors.password) setErrors({ ...errors, password: '' });
+                }}
+                isPassword={true}
+                secureTextEntry={!showPassword}
+                togglePasswordVisibility={() => setShowPassword(!showPassword)}
+                error={errors.password}
+              />
             </View>
 
             {/* ─── FORGOT PASSWORD ─── */}
             {mode === 'login' && (
-              <TouchableOpacity style={{ alignSelf: 'flex-end', marginBottom: 24 }}>
-                <Text style={{ color: COLORS.primary, fontWeight: '700', fontSize: 13, letterSpacing: 0.3 }}>Forgot Password?</Text>
+              <TouchableOpacity style={styles.forgotPasswordBtn}>
+                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
               </TouchableOpacity>
             )}
 
             {/* ─── ROLE TOGGLE (Signup Only) ─── */}
             {mode === 'signup' && (
-              <View style={{ flexDirection: 'row', gap: 12, marginBottom: 24 }}>
-                {['student', 'chef'].map((role) => {
-                  const active = (role === 'chef' && isChef) || (role === 'student' && !isChef);
-                  return (
-                    <TouchableOpacity
-                      key={role}
-                      onPress={() => setIsChef(role === 'chef')}
-                      style={{
-                        flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-                        paddingVertical: 14, borderRadius: 12,
-                        borderWidth: 1.5, borderColor: active ? COLORS.obsidian : COLORS.border,
-                        backgroundColor: active ? COLORS.obsidian : 'transparent',
-                      }}
-                    >
-                      <Ionicons 
-                        name={role === 'chef' ? 'restaurant-outline' : 'school-outline'} 
-                        size={18} 
-                        color={active ? 'white' : COLORS.gray}
-                        style={{ marginRight: 8 }}
-                      />
-                      <Text style={{ color: active ? 'white' : COLORS.gray, fontWeight: '700', fontSize: 13 }}>
-                        {role === 'chef' ? 'Home Chef' : 'Student'}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+              <RoleSelector isChef={isChef} setIsChef={setIsChef} />
             )}
 
             {/* ─── ACTION BUTTON ─── */}
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={handleAuth}
               disabled={loading}
               activeOpacity={0.85}
-              style={{ 
-                backgroundColor: COLORS.obsidian,
-                height: 56, borderRadius: 16,
-                justifyContent: 'center', alignItems: 'center',
-                marginBottom: 24,
-                shadowColor: COLORS.obsidian, shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { height: 4, width: 0 },
-                elevation: 4
-              }}
+              style={styles.actionBtn}
             >
               {loading ? (
                 <ActivityIndicator color="white" size="small" />
               ) : (
-                <Text style={{ fontSize: 16, fontWeight: '800', color: 'white', letterSpacing: 0.5 }}>
+                <Text style={styles.actionBtnText}>
                   {mode === 'login' ? 'LOGIN' : 'CREATE ACCOUNT'}
                 </Text>
               )}
             </TouchableOpacity>
 
             {/* ─── DIVIDER ─── */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 24 }}>
-              <View style={{ flex: 1, height: 1, backgroundColor: COLORS.border }} />
-              <Text style={{ color: COLORS.gray, fontSize: 12, marginHorizontal: 16, fontWeight: '600' }}>OR CONTINUE WITH</Text>
-              <View style={{ flex: 1, height: 1, backgroundColor: COLORS.border }} />
+            <View style={styles.dividerContainer}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>OR CONTINUE WITH</Text>
+              <View style={styles.dividerLine} />
             </View>
 
             {/* ─── GOOGLE BTN ─── */}
-            <TouchableOpacity
-              activeOpacity={0.8}
-              style={{
-                height: 54, borderRadius: 16,
-                backgroundColor: '#FFF',
-                justifyContent: 'center', alignItems: 'center',
-                borderWidth: 1, borderColor: COLORS.border,
-                flexDirection: 'row', gap: 8,
-                marginBottom: 32
-              }}
-            >
+            <TouchableOpacity activeOpacity={0.8} style={styles.googleBtn}>
               <Ionicons name="logo-google" size={20} color={COLORS.obsidian} />
-              <Text style={{ color: COLORS.obsidian, fontWeight: '700', fontSize: 14 }}>Google</Text>
+              <Text style={styles.googleBtnText}>Google</Text>
             </TouchableOpacity>
 
             {/* ─── SWITCH MODE ─── */}
-            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
-              <Text style={{ color: COLORS.gray, fontSize: 14, fontWeight: '500' }}>
+            <View style={styles.switchModeContainer}>
+              <Text style={styles.switchModeText}>
                 {mode === 'login' ? "New here?" : 'Already have an account?'}
               </Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={() => {
                   setMode(mode === 'login' ? 'signup' : 'login');
                   setErrors({});
@@ -345,7 +314,7 @@ export default function LoginScreen() {
                   setPassword('');
                 }}
               >
-                <Text style={{ color: COLORS.primary, fontWeight: '800', fontSize: 14 }}>
+                <Text style={styles.switchModeAction}>
                   {mode === 'login' ? 'Create Account' : 'Log In'}
                 </Text>
               </TouchableOpacity>
@@ -357,3 +326,220 @@ export default function LoginScreen() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background
+  },
+  topHeader: {
+    paddingBottom: 20,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  appTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: COLORS.obsidian,
+    letterSpacing: -1
+  },
+  keyboardView: {
+    flex: 1
+  },
+  bottomSheet: {
+    flex: 1,
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { height: -5, width: 0 },
+    elevation: 5,
+    overflow: 'hidden'
+  },
+  scrollContent: {
+    paddingHorizontal: 24,
+    paddingTop: 40,
+    paddingBottom: 40
+  },
+  // Header
+  headerContainer: {
+    alignItems: 'center',
+    marginBottom: 32
+  },
+  logoBox: {
+    width: 80,
+    height: 80,
+    borderRadius: 24,
+    backgroundColor: '#FFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: COLORS.primary,
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 5
+  },
+  logoImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 12
+  },
+  welcomeTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: COLORS.obsidian,
+    letterSpacing: -0.5,
+    marginBottom: 6
+  },
+  welcomeSubtitle: {
+    color: COLORS.gray,
+    fontSize: 15,
+    fontWeight: '500',
+    letterSpacing: 0.2
+  },
+  // Inputs
+  formContainer: {
+    gap: 16,
+    marginBottom: 24
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    borderRadius: 14,
+    height: 56,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border
+  },
+  inputIcon: {
+    marginRight: 12
+  },
+  inputField: {
+    flex: 1,
+    color: COLORS.obsidian,
+    fontSize: 16,
+    fontWeight: '600'
+  },
+  errorText: {
+    color: COLORS.error,
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 4
+  },
+  forgotPasswordBtn: {
+    alignSelf: 'flex-end',
+    marginBottom: 24
+  },
+  forgotPasswordText: {
+    color: COLORS.primary,
+    fontWeight: '700',
+    fontSize: 13,
+    letterSpacing: 0.3
+  },
+  // Roles
+  roleContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 24
+  },
+  roleButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1.5
+  },
+  roleButtonActive: {
+    borderColor: COLORS.obsidian,
+    backgroundColor: COLORS.obsidian
+  },
+  roleButtonInactive: {
+    borderColor: COLORS.border,
+    backgroundColor: 'transparent'
+  },
+  roleIcon: {
+    marginRight: 8
+  },
+  roleText: {
+    fontWeight: '700',
+    fontSize: 13
+  },
+  // Action Button
+  actionBtn: {
+    backgroundColor: COLORS.obsidian,
+    height: 56,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: COLORS.obsidian,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { height: 4, width: 0 },
+    elevation: 4
+  },
+  actionBtnText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: 'white',
+    letterSpacing: 0.5
+  },
+  // Divider
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: COLORS.border
+  },
+  dividerText: {
+    color: COLORS.gray,
+    fontSize: 12,
+    marginHorizontal: 16,
+    fontWeight: '600'
+  },
+  // Google Btn
+  googleBtn: {
+    height: 54,
+    borderRadius: 16,
+    backgroundColor: '#FFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 32
+  },
+  googleBtnText: {
+    color: COLORS.obsidian,
+    fontWeight: '700',
+    fontSize: 14
+  },
+  // Switch Mode
+  switchModeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6
+  },
+  switchModeText: {
+    color: COLORS.gray,
+    fontSize: 14,
+    fontWeight: '500'
+  },
+  switchModeAction: {
+    color: COLORS.primary,
+    fontWeight: '800',
+    fontSize: 14
+  }
+});

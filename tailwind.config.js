@@ -2,8 +2,8 @@
 module.exports = {
   content: [
     "./App.{js,jsx,ts,tsx}", 
-    "./app/**/*.{js,jsx,ts,tsx}",      // ✅ Scans your pages
-    "./components/**/*.{js,jsx,ts,tsx}" // ✅ Scans your custom components (Missing before)
+    "./app/**/*.{js,jsx,ts,tsx}",     
+    "./components/**/*.{js,jsx,ts,tsx}"
   ],
   theme: {
     extend: {

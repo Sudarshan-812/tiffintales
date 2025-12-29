@@ -1,21 +1,25 @@
-import { Stack } from 'expo-router';
 import { useState } from 'react';
-import { View } from 'react-native';
-import AnimatedSplash from '../components/AnimatedSplash'; // 👈 Import it
+import { Stack } from 'expo-router';
+import AnimatedSplash from '../components/AnimatedSplash';
 
+/**
+ * RootLayout
+ * Entry point for the application navigation.
+ * Handles the transition from the custom animated splash screen to the main navigation stack.
+ */
 export default function RootLayout() {
-  const [appReady, setAppReady] = useState(false);
+  const [isAppReady, setIsAppReady] = useState(false);
 
-  // 1. If App is NOT ready, show Splash
-  if (!appReady) {
+  // Render the custom animated splash screen until it signals completion
+  if (!isAppReady) {
     return (
       <AnimatedSplash 
-        onFinish={() => setAppReady(true)} // 👈 When animation ends, set appReady = true
+        onFinish={() => setIsAppReady(true)} 
       />
     );
   }
 
-  // 2. Once Ready, Show the Actual App
+  // Mount the main application navigation
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />

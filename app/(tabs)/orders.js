@@ -1,18 +1,23 @@
-import { 
-  View, 
-  Text, 
-  FlatList, 
-  RefreshControl, 
-  ActivityIndicator, 
-  StyleSheet, 
+import React, { useEffect, useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  FlatList,
+  RefreshControl,
+  ActivityIndicator,
+  StyleSheet,
   Image,
-  TouchableOpacity
+  TouchableOpacity,
+  Alert
 } from 'react-native';
-import { useEffect, useState, useCallback } from 'react';
-import { supabase } from '../../lib/supabase';
+
+// Third-party Imports
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+// Local Imports
+import { supabase } from '../../lib/supabase';
 
 // 🎨 Premium Theme
 const COLORS = {
@@ -28,7 +33,12 @@ const COLORS = {
   border: '#E5E7EB',
 };
 
-// 🚦 STATUS BADGE
+/**
+ * StatusBadge Component
+ * Renders a color-coded badge based on the order status.
+ * @param {object} props
+ * @param {string} props.status - The current status of the order (pending, cooking, etc.)
+ */
 const StatusBadge = ({ status }) => {
   let color = COLORS.gray;
   let icon = 'time-outline';
@@ -66,24 +76,85 @@ const StatusBadge = ({ status }) => {
       bg = '#FEE2E2';
       label = 'Cancelled';
       break;
+    default:
+      label = status;
   }
 
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: bg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
-      <Ionicons name={icon} size={12} color={color} style={{ marginRight: 4 }} />
-      <Text style={{ color: color, fontSize: 11, fontWeight: '700', textTransform: 'capitalize' }}>{label}</Text>
+    <View style={[styles.badgeContainer, { backgroundColor: bg }]}>
+      <Ionicons name={icon} size={12} color={color} style={styles.badgeIcon} />
+      <Text style={[styles.badgeText, { color }]}>{label}</Text>
+    </View>
+  );
+};
+
+/**
+ * OrderCard Component
+ * Renders individual order details in the list.
+ * @param {object} props
+ * @param {object} props.item - The order data object
+ */
+const OrderCard = ({ item }) => {
+  // Safe navigation to get the first image or fallback
+  const firstItemImage = item.order_items?.[0]?.menu_items?.image_url;
+  
+  // Create a summary string of items (e.g., "2x Burger, 1x Coke")
+  const itemsSummary = item.order_items
+    .map(i => `${i.quantity}x ${i.menu_items?.name}`)
+    .join(', ');
+
+  return (
+    <View style={styles.card}>
+      {/* Header: Date & Status */}
+      <View style={styles.cardHeader}>
+        <Text style={styles.date}>
+          {new Date(item.created_at).toLocaleDateString('en-US', {
+            day: 'numeric',
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit'
+          })}
+        </Text>
+        <StatusBadge status={item.status} />
+      </View>
+
+      <View style={styles.divider} />
+
+      {/* Content Row */}
+      <View style={styles.contentRow}>
+        <Image
+          source={{ uri: firstItemImage || 'https://via.placeholder.com/100' }}
+          style={styles.image}
+        />
+
+        <View style={styles.info}>
+          <Text style={styles.itemsText} numberOfLines={2}>
+            {itemsSummary}
+          </Text>
+          <Text style={styles.price}>₹{item.total_price}</Text>
+        </View>
+      </View>
+
+      {/* Footer: Order ID */}
+      <View style={styles.footer}>
+        <Text style={styles.orderId}>ID: #{item.id.toString().slice(-6)}</Text>
+      </View>
     </View>
   );
 };
 
 export default function OrdersScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  
+  // State
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const router = useRouter();
 
-  // 📥 FETCH ORDERS
+  /**
+   * Fetches the user's order history from Supabase.
+   */
   const fetchOrders = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -102,35 +173,38 @@ export default function OrdersScreen() {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error("Supabase Error:", error);
-      } else {
-        setOrders(data || []);
-      }
-    } catch (e) {
-      console.log(e);
+      if (error) throw error;
+      setOrders(data || []);
+
+    } catch (error) {
+      Alert.alert('Error', 'Failed to load orders. Please try again.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
+  // 🔄 Fetch on Screen Focus
   useFocusEffect(
     useCallback(() => {
       fetchOrders();
     }, [])
   );
 
-  // 📡 REALTIME UPDATES
+  /**
+   * Realtime Listener
+   * Subscribes to updates on the 'orders' table to update status live (e.g. pending -> cooking).
+   */
   useEffect(() => {
     const channel = supabase.channel('student_orders')
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'orders' },
         (payload) => {
-          // Update the specific order in the list instantly
-          setOrders(currentOrders => 
-            currentOrders.map(o => o.id === payload.new.id ? { ...o, status: payload.new.status } : o)
+          setOrders(currentOrders =>
+            currentOrders.map(o =>
+              o.id === payload.new.id ? { ...o, status: payload.new.status } : o
+            )
           );
         }
       )
@@ -144,49 +218,6 @@ export default function OrdersScreen() {
     fetchOrders();
   };
 
-  const renderOrder = ({ item }) => {
-    // Get first item image or placeholder
-    const firstItemImage = item.order_items?.[0]?.menu_items?.image_url;
-    const itemsText = item.order_items.map(i => `${i.quantity}x ${i.menu_items?.name}`).join(', ');
-
-    return (
-      <View style={styles.card}>
-        {/* Header: Date & Status */}
-        <View style={styles.cardHeader}>
-          <Text style={styles.date}>
-            {new Date(item.created_at).toLocaleDateString('en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-          </Text>
-          <StatusBadge status={item.status} />
-        </View>
-
-        <View style={styles.divider} />
-
-        {/* Content Row */}
-        <View style={styles.contentRow}>
-          {/* Image */}
-          <Image 
-            source={{ uri: firstItemImage || 'https://via.placeholder.com/100' }} 
-            style={styles.image}
-          />
-          
-          {/* Info */}
-          <View style={styles.info}>
-            <Text style={styles.itemsText} numberOfLines={2}>
-              {itemsText}
-            </Text>
-            <Text style={styles.price}>₹{item.total_price}</Text>
-          </View>
-        </View>
-
-        {/* Action / ID */}
-        <View style={styles.footer}>
-           <Text style={styles.orderId}>ID: #{item.id.toString().slice(-6)}</Text>
-           {/* If cooking, show pulse or specialized text could go here */}
-        </View>
-      </View>
-    );
-  };
-
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
@@ -195,24 +226,22 @@ export default function OrdersScreen() {
       </View>
 
       {loading ? (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={COLORS.obsidian} />
         </View>
       ) : (
         <FlatList
           data={orders}
           keyExtractor={item => item.id.toString()}
-          renderItem={renderOrder}
-          contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
+          renderItem={({ item }) => <OrderCard item={item} />}
+          contentContainerStyle={styles.listContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           ListEmptyComponent={
-            <View style={{ alignItems: 'center', marginTop: 100 }}>
-              <Ionicons name="receipt-outline" size={64} color={COLORS.gray} style={{ opacity: 0.5 }} />
-              <Text style={{ marginTop: 16, color: COLORS.gray, fontSize: 16, fontWeight: '600' }}>
-                No active orders
-              </Text>
-              <TouchableOpacity onPress={() => router.push('/(tabs)')} style={{ marginTop: 20 }}>
-                 <Text style={{ color: COLORS.obsidian, fontWeight: '700' }}>Browse Menu</Text>
+            <View style={styles.emptyContainer}>
+              <Ionicons name="receipt-outline" size={64} color={COLORS.gray} style={styles.emptyIcon} />
+              <Text style={styles.emptyText}>No active orders</Text>
+              <TouchableOpacity onPress={() => router.push('/(tabs)')} style={styles.browseButton}>
+                <Text style={styles.browseButtonText}>Browse Menu</Text>
               </TouchableOpacity>
             </View>
           }
@@ -223,10 +252,47 @@ export default function OrdersScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  screenHeader: { paddingHorizontal: 20, paddingBottom: 10, paddingTop: 10, backgroundColor: COLORS.background },
-  screenTitle: { fontSize: 28, fontWeight: '800', color: COLORS.obsidian },
-  
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background
+  },
+  screenHeader: {
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+    paddingTop: 10,
+    backgroundColor: COLORS.background
+  },
+  screenTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: COLORS.obsidian
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  listContent: {
+    padding: 20,
+    paddingBottom: 100
+  },
+  // Status Badge
+  badgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8
+  },
+  badgeIcon: {
+    marginRight: 4
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'capitalize'
+  },
+  // Card
   card: {
     backgroundColor: COLORS.surface,
     borderRadius: 16,
@@ -246,16 +312,71 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  date: { fontSize: 12, color: COLORS.gray, fontWeight: '600' },
-  
-  divider: { height: 1, backgroundColor: COLORS.lightGray, marginBottom: 12 },
-  
-  contentRow: { flexDirection: 'row', alignItems: 'center' },
-  image: { width: 50, height: 50, borderRadius: 8, backgroundColor: COLORS.lightGray, marginRight: 12 },
-  info: { flex: 1 },
-  itemsText: { fontSize: 14, color: COLORS.obsidian, fontWeight: '500', marginBottom: 4 },
-  price: { fontSize: 16, fontWeight: '800', color: COLORS.obsidian },
-  
-  footer: { marginTop: 12, flexDirection: 'row', justifyContent: 'flex-end' },
-  orderId: { fontSize: 10, color: COLORS.gray, fontWeight: '600', textTransform: 'uppercase' },
+  date: {
+    fontSize: 12,
+    color: COLORS.gray,
+    fontWeight: '600'
+  },
+  divider: {
+    height: 1,
+    backgroundColor: COLORS.lightGray,
+    marginBottom: 12
+  },
+  contentRow: {
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
+  image: {
+    width: 50,
+    height: 50,
+    borderRadius: 8,
+    backgroundColor: COLORS.lightGray,
+    marginRight: 12
+  },
+  info: {
+    flex: 1
+  },
+  itemsText: {
+    fontSize: 14,
+    color: COLORS.obsidian,
+    fontWeight: '500',
+    marginBottom: 4
+  },
+  price: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.obsidian
+  },
+  footer: {
+    marginTop: 12,
+    flexDirection: 'row',
+    justifyContent: 'flex-end'
+  },
+  orderId: {
+    fontSize: 10,
+    color: COLORS.gray,
+    fontWeight: '600',
+    textTransform: 'uppercase'
+  },
+  // Empty State
+  emptyContainer: {
+    alignItems: 'center',
+    marginTop: 100
+  },
+  emptyIcon: {
+    opacity: 0.5
+  },
+  emptyText: {
+    marginTop: 16,
+    color: COLORS.gray,
+    fontSize: 16,
+    fontWeight: '600'
+  },
+  browseButton: {
+    marginTop: 20
+  },
+  browseButtonText: {
+    color: COLORS.obsidian,
+    fontWeight: '700'
+  }
 });
