@@ -12,7 +12,9 @@ import {
   Animated,
   Image,
   StyleSheet,
-  Platform
+  Platform,
+  Dimensions,
+  ScrollView
 } from 'react-native';
 
 // Third-party Imports
@@ -26,11 +28,13 @@ import { useCart } from '../../lib/store';
 import { getCurrentLocation } from '../../lib/location';
 import DishCard from '../../components/DishCard';
 
-// Premium Theme Palette
+const { width } = Dimensions.get('window');
+
+// 🎨 Premium Theme Palette (From Code 2)
 const COLORS = {
   background: '#F9FAFB',
   surface: '#FFFFFF',
-  obsidian: '#111827',
+  obsidian: '#0F172A', // Obsidian
   primary: '#7E22CE',
   secondary: '#F3F4F6',
   gray: '#6B7280',
@@ -41,11 +45,7 @@ const COLORS = {
   primaryLight: '#F3E8FF',
 };
 
-/**
- * Determines if a dish is Vegetarian based on flag or keywords.
- * @param {object} item - The menu item
- * @returns {boolean}
- */
+// --- HELPER FUNCTIONS ---
 const isVeg = (item) => {
   if (item.is_veg !== undefined && item.is_veg !== null) return item.is_veg;
   const text = (item.name + " " + item.description).toLowerCase();
@@ -53,10 +53,50 @@ const isVeg = (item) => {
   return !nonVegKeywords.some(keyword => text.includes(keyword));
 };
 
-/**
- * FilterChip Component
- * Renders a selectable category chip.
- */
+// --- COMPONENTS ---
+
+// 1. Promotional Banners (From Code 2)
+const PromotionalBanner = () => (
+  <ScrollView 
+    horizontal 
+    showsHorizontalScrollIndicator={false} 
+    style={styles.promoScrollView}
+    contentContainerStyle={styles.promoContentContainer}
+  >
+    {/* Offer 1 */}
+    <View style={[styles.promoCard, { backgroundColor: '#FFF7ED', borderColor: '#FFEDD5' }]}>
+      <View style={styles.promoContent}>
+        <Text style={[styles.promoTitle, { color: '#C2410C' }]}>50% OFF</Text>
+        <Text style={[styles.promoSubtitle, { color: '#9A3412' }]}>First 3 Orders</Text>
+        <View style={{backgroundColor: 'rgba(255,255,255,0.6)', paddingHorizontal:6, paddingVertical:2, borderRadius:4, alignSelf:'flex-start'}}>
+           <Text style={[styles.promoCode, { color: '#9A3412' }]}>TIFFIN50</Text>
+        </View>
+      </View>
+      <Image 
+        source={{ uri: 'https://cdn-icons-png.flaticon.com/512/7541/7541673.png' }} 
+        style={styles.promoImage} 
+      />
+    </View>
+
+    {/* Offer 2 */}
+    <View style={[styles.promoCard, { backgroundColor: '#EEF2FF', borderColor: '#E0E7FF', marginLeft: 12 }]}>
+      <View style={styles.promoContent}>
+        <Text style={[styles.promoTitle, { color: '#3730A3' }]}>Free Delivery</Text>
+        {/* Fixed JSX syntax for greater than symbol */}
+        <Text style={[styles.promoSubtitle, { color: '#312E81' }]}>Orders {'>'} ₹150</Text>
+        <TouchableOpacity style={{backgroundColor: '#4338CA', paddingHorizontal:10, paddingVertical:4, borderRadius:6, alignSelf:'flex-start'}}>
+           <Text style={{color:'white', fontSize:10, fontWeight:'700'}}>Order Now</Text>
+        </TouchableOpacity>
+      </View>
+      <Image 
+        source={{ uri: 'https://cdn-icons-png.flaticon.com/512/2830/2830305.png' }} 
+        style={styles.promoImage} 
+      />
+    </View>
+  </ScrollView>
+);
+
+// 2. Filter Chips (From Code 2)
 const FilterChip = ({ label, icon, isActive, onPress, count }) => (
   <TouchableOpacity
     onPress={onPress}
@@ -69,7 +109,7 @@ const FilterChip = ({ label, icon, isActive, onPress, count }) => (
     {icon && (
       <Ionicons
         name={icon}
-        size={14}
+        size={16}
         color={isActive ? 'white' : COLORS.gray}
         style={styles.filterIcon}
       />
@@ -77,20 +117,15 @@ const FilterChip = ({ label, icon, isActive, onPress, count }) => (
     <Text style={[styles.filterText, isActive && styles.filterTextActive]}>
       {label}
     </Text>
-    {count !== undefined && (
-      <View style={isActive ? styles.countBadgeActive : styles.countBadgeInactive}>
-        <Text style={[styles.countText, isActive && styles.countTextActive]}>
-          {count}
-        </Text>
+    {isActive && (
+      <View style={styles.countBadgeActive}>
+        <Text style={styles.countTextActive}>{count}</Text>
       </View>
     )}
   </TouchableOpacity>
 );
 
-/**
- * HomeHeader Component
- * Contains Location, Profile, Hero text, Search, and Filters.
- */
+// 3. Home Header (From Code 2)
 const HomeHeader = ({
   insets,
   locationStatus,
@@ -102,72 +137,77 @@ const HomeHeader = ({
   filteredCount,
   onLogout
 }) => (
-  <View style={styles.headerBackground}>
+  <View style={styles.headerWrapper}>
     <View style={[styles.headerContainer, { paddingTop: insets.top + 10 }]}>
-
-      {/* Top Row: Location & Profile */}
+      
+      {/* Location Row */}
       <View style={styles.topRow}>
-        <View>
-          <View style={styles.locationRow}>
-            <Ionicons name="location" size={14} color={COLORS.primary} style={styles.locationIcon} />
-            <Text style={styles.locationTitle}>VIJAYAPURA</Text>
-            <Ionicons name="chevron-down" size={12} color={COLORS.gray} style={styles.locationChevron} />
+        <View style={styles.locationContainer}>
+          <View style={styles.locationIconBg}>
+            <Ionicons name="location" size={20} color={COLORS.obsidian} />
           </View>
-          <Text style={styles.locationStatus}>{locationStatus}</Text>
+          <View>
+            <Text style={styles.locationLabel}>DELIVERING TO</Text>
+            <TouchableOpacity style={styles.locationSelector}>
+              <Text style={styles.locationTitle}>VIJAYAPURA</Text>
+              <Ionicons name="caret-down" size={12} color={COLORS.obsidian} style={{ marginLeft: 4 }} />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <TouchableOpacity
-          onPress={onLogout}
-          style={styles.profileButton}
-        >
-          <Ionicons name="person" size={18} color={COLORS.obsidian} />
+        <TouchableOpacity onPress={onLogout} style={styles.profileButton}>
+          <Image 
+            source={{ uri: 'https://api.dicebear.com/7.x/avataaars/png?seed=Chef' }} 
+            style={styles.profileImage}
+          />
         </TouchableOpacity>
       </View>
 
-      {/* 🥘 Hero Section */}
-      <View style={styles.heroSection}>
-        <View>
-          <Text style={styles.heroSubtitle}>Hungry?</Text>
-          <Text style={styles.heroTitle}>
-            What's in your{"\n"}
-            <Text style={{ color: COLORS.primary }}>tiffin today?</Text>
-          </Text>
-        </View>
-        <View style={styles.heroIconCircle}>
-          <Text style={styles.heroEmoji}>🍱</Text>
-        </View>
+      {/* Hero Text */}
+      <View style={styles.heroTextContainer}>
+        <Text style={styles.heroGreeting}>Hungry?</Text>
+        <Text style={styles.heroQuestion}>Order homemade food.</Text>
       </View>
 
       {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <Ionicons name="search" size={18} color={COLORS.gray} />
+      <View style={styles.searchFloatingContainer}>
+        <Ionicons name="search" size={20} color={COLORS.obsidian} style={styles.searchIcon} />
         <TextInput
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholder="Search for biryani, paneer..."
+          placeholder="Search 'Paneer', 'Thali'..."
           placeholderTextColor={COLORS.gray}
           style={styles.searchInput}
         />
-        {searchQuery.length > 0 && (
+        {searchQuery.length > 0 ? (
           <TouchableOpacity onPress={() => { setSearchQuery(''); Keyboard.dismiss(); }}>
-            <Ionicons name="close-circle" size={16} color={COLORS.gray} />
+            <Ionicons name="close-circle" size={18} color={COLORS.gray} />
           </TouchableOpacity>
+        ) : (
+          <View style={styles.micButton}>
+             <Ionicons name="mic" size={18} color={COLORS.gray} />
+          </View>
         )}
       </View>
     </View>
 
-    {/* FILTERS */}
-    <View style={styles.filterSection}>
-      <View style={styles.chipRow}>
+    {/* Filters & Banners */}
+    <View style={styles.bodyContentContainer}>
+      <PromotionalBanner />
+      
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Eat what makes you happy</Text>
+      </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={{ paddingHorizontal: 20 }}>
         <FilterChip
           label="All"
-          icon="grid"
           isActive={category === 'All'}
           onPress={() => setCategory('All')}
           count={menuItems.length}
         />
         <FilterChip
-          label="Veg"
+          label="Veg Only"
           icon="leaf"
           isActive={category === 'Veg'}
           onPress={() => setCategory('Veg')}
@@ -180,24 +220,14 @@ const HomeHeader = ({
           onPress={() => setCategory('Non-Veg')}
           count={menuItems.filter(i => !isVeg(i)).length}
         />
-      </View>
+      </ScrollView>
 
-      <View style={styles.resultsHeader}>
-        <Text style={styles.resultsTitle}>
-          {category === 'All' ? 'Near You' : category + ' Menu'}
-        </Text>
-        <View style={styles.resultsBadge}>
-          <Text style={styles.resultsBadgeText}>{filteredCount} ITEMS</Text>
-        </View>
-      </View>
+      <View style={styles.listDivider} />
     </View>
   </View>
 );
 
-/**
- * FloatingCart Component
- * Sticky footer showing cart summary.
- */
+// 4. FLOATING CART (From Code 1 - Logic & Position)
 const FloatingCart = ({ cart, total, count, slideUpAnim, insets, onPress }) => {
   const cartImages = [...new Set(cart.map(item => item.image_url))].slice(0, 3);
 
@@ -206,6 +236,7 @@ const FloatingCart = ({ cart, total, count, slideUpAnim, insets, onPress }) => {
       style={[
         styles.floatingCartContainer,
         {
+          // ✅ Position Exactly from Code 1
           bottom: insets.bottom > 0 ? insets.bottom : 20,
           transform: [{ translateY: slideUpAnim }]
         }
@@ -248,6 +279,8 @@ const FloatingCart = ({ cart, total, count, slideUpAnim, insets, onPress }) => {
   );
 };
 
+
+// --- MAIN SCREEN ---
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -257,7 +290,6 @@ export default function HomeScreen() {
   // State
   const [menuItems, setMenuItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [category, setCategory] = useState('All');
   const [userPosition, setUserPosition] = useState(null);
@@ -270,7 +302,7 @@ export default function HomeScreen() {
     initializeData();
   }, []);
 
-  // Cart Animation Effect
+  // Cart Animation
   useEffect(() => {
     if (cart.length > 0) {
       Animated.spring(slideUpAnim, {
@@ -291,7 +323,6 @@ export default function HomeScreen() {
   const initializeData = async () => {
     setLoading(true);
     try {
-      // A. Get GPS
       try {
         const coords = await getCurrentLocation();
         if (coords) {
@@ -305,7 +336,6 @@ export default function HomeScreen() {
         setLocationStatus('Vijayapura (Default)');
       }
 
-      // B. Fetch Menu
       const { data, error } = await supabase
         .from('menu_items')
         .select(`*, profiles:chef_id ( latitude, longitude )`);
@@ -317,7 +347,6 @@ export default function HomeScreen() {
       Alert.alert('Error', error.message);
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   };
 
@@ -357,9 +386,10 @@ export default function HomeScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.surface} />
 
-      {loading && !refreshing ? (
+      {loading ? (
         <View style={styles.loaderContainer}>
           <ActivityIndicator size="large" color={COLORS.obsidian} />
+          <Text style={{marginTop: 10, color: COLORS.gray, fontWeight: '500'}}>Setting up the kitchen...</Text>
         </View>
       ) : (
         <FlatList
@@ -387,14 +417,14 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.emptyStateContainer}>
-              <Ionicons name="fast-food-outline" size={60} color={COLORS.gray} />
-              <Text style={styles.emptyStateText}>No dishes found</Text>
+              <Ionicons name="fast-food-outline" size={60} color={COLORS.border} />
+              <Text style={styles.emptyStateTitle}>No items found</Text>
+              <Text style={styles.emptyStateText}>Try searching for 'Roti' or 'Dal'</Text>
             </View>
           }
         />
       )}
 
-      {/* ZOMATO STYLE FLOATING CART */}
       {cart.length > 0 && (
         <FloatingCart
           cart={cart}
@@ -418,34 +448,31 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  cardWrapper: {
-    paddingHorizontal: 20,
-  },
-  emptyStateContainer: {
-    alignItems: 'center',
-    marginTop: 40,
-    opacity: 0.6,
-  },
-  emptyStateText: {
-    marginTop: 16,
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.gray,
-  },
-  // Header Styles
-  headerBackground: {
     backgroundColor: COLORS.background,
   },
+  cardWrapper: {
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  listDivider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginHorizontal: 20,
+    marginBottom: 20,
+    marginTop: 10
+  },
+  
+  // --- HEADER STYLES (From Code 2) ---
+  headerWrapper: { backgroundColor: COLORS.background },
   headerContainer: {
     backgroundColor: COLORS.surface,
-    paddingBottom: 16,
+    paddingBottom: 24,
     paddingHorizontal: 20,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.03,
+    shadowOpacity: 0.05,
     shadowRadius: 10,
     elevation: 5,
     zIndex: 10,
@@ -454,181 +481,70 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 2,
+  locationContainer: { flexDirection: 'row', alignItems: 'center' },
+  locationIconBg: {
+    width: 36, height: 36, borderRadius: 12, backgroundColor: COLORS.secondary,
+    justifyContent: 'center', alignItems: 'center', marginRight: 10,
   },
-  locationIcon: {
-    marginRight: 4,
+  locationLabel: { fontSize: 10, color: COLORS.gray, fontWeight: '700', letterSpacing: 0.5 },
+  locationSelector: { flexDirection: 'row', alignItems: 'center' },
+  locationTitle: { fontSize: 14, fontWeight: '800', color: COLORS.obsidian },
+  profileButton: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
+  profileImage: { width: 38, height: 38, borderRadius: 19, borderWidth: 2, borderColor: COLORS.surface },
+
+  heroTextContainer: { marginBottom: 20 },
+  heroGreeting: { fontSize: 16, color: COLORS.gray, fontWeight: '600', marginBottom: 2 },
+  heroQuestion: { fontSize: 24, fontWeight: '900', color: COLORS.obsidian },
+
+  searchFloatingContainer: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface,
+    borderRadius: 16, paddingHorizontal: 16, height: 52,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3,
+    borderWidth: 1, borderColor: COLORS.border,
   },
-  locationTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.obsidian,
-    letterSpacing: 0.5,
+  searchIcon: { marginRight: 10 },
+  searchInput: { flex: 1, fontSize: 14, fontWeight: '600', color: COLORS.obsidian, height: '100%' },
+  micButton: { paddingLeft: 8, borderLeftWidth: 1, borderLeftColor: COLORS.border },
+
+  // --- CONTENT STYLES (From Code 2) ---
+  bodyContentContainer: { marginTop: 16 },
+  
+  promoScrollView: { marginBottom: 24 },
+  promoContentContainer: { paddingHorizontal: 20 },
+  promoCard: {
+    width: width * 0.72, height: 130, borderRadius: 20, padding: 16,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1
   },
-  locationChevron: {
-    marginLeft: 2,
-  },
-  locationStatus: {
-    fontSize: 13,
-    color: COLORS.gray,
-    fontWeight: '500',
-  },
-  profileButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.secondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  // Hero Styles
-  heroSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  heroSubtitle: {
-    fontSize: 14,
-    color: COLORS.gray,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  heroTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: COLORS.obsidian,
-    lineHeight: 28,
-  },
-  heroIconCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: COLORS.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    transform: [{ rotate: '-10deg' }],
-  },
-  heroEmoji: {
-    fontSize: 28,
-  },
-  // Search Styles
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.secondary,
-    borderRadius: 25,
-    paddingHorizontal: 14,
-    height: 46,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  searchInput: {
-    flex: 1,
-    marginLeft: 8,
-    fontSize: 14,
-    fontWeight: '500',
-    color: COLORS.obsidian,
-    height: '100%',
-  },
-  // Filter Styles
-  filterSection: {
-    padding: 20,
-    paddingBottom: 10,
-  },
-  chipRow: {
-    flexDirection: 'row',
-  },
+  promoContent: { flex: 1 },
+  promoTitle: { fontSize: 20, fontWeight: '900', marginBottom: 2 },
+  promoSubtitle: { fontSize: 12, fontWeight: '600', marginBottom: 10 },
+  promoCode: { fontSize: 10, fontWeight: '800' },
+  promoImage: { width: 70, height: 70, resizeMode: 'contain' },
+
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12 },
+  sectionTitle: { fontSize: 18, fontWeight: '800', color: COLORS.obsidian },
+  
+  filterScroll: { marginBottom: 10 },
   filterChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 10,
-    borderWidth: 1,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, flexDirection: 'row',
+    alignItems: 'center', marginRight: 10, backgroundColor: COLORS.surface,
+    borderWidth: 1, borderColor: COLORS.border,
   },
-  filterChipActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-    shadowColor: COLORS.primary,
-    elevation: 4,
-  },
-  filterChipInactive: {
-    backgroundColor: COLORS.surface,
-    borderColor: COLORS.border,
-    shadowColor: 'transparent',
-    elevation: 0,
-  },
-  filterIcon: {
-    marginRight: 6,
-  },
-  filterText: {
-    fontSize: 12,
-  },
-  filterTextActive: {
-    color: 'white',
-    fontWeight: '700',
-  },
-  filterTextInactive: {
-    color: COLORS.gray,
-    fontWeight: '600',
-  },
-  countBadgeActive: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 12,
-    marginLeft: 6,
-  },
-  countBadgeInactive: {
-    backgroundColor: COLORS.secondary,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 12,
-    marginLeft: 6,
-  },
-  countText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: COLORS.gray,
-  },
-  countTextActive: {
-    color: 'white',
-  },
-  resultsHeader: {
-    marginTop: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  resultsTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.obsidian,
-  },
-  resultsBadge: {
-    backgroundColor: COLORS.secondary,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  resultsBadgeText: {
-    fontSize: 11,
-    color: COLORS.gray,
-    fontWeight: '700',
-  },
-  // Floating Cart Styles
+  filterChipActive: { backgroundColor: COLORS.obsidian, borderColor: COLORS.obsidian },
+  filterChipInactive: {},
+  filterIcon: { marginRight: 6 },
+  filterText: { fontSize: 13, fontWeight: '600', color: COLORS.gray },
+  filterTextActive: { color: 'white', fontWeight: '700' },
+  countBadgeActive: { backgroundColor: 'rgba(255,255,255,0.2)', width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', marginLeft: 6 },
+  countTextActive: { color: 'white', fontSize: 9, fontWeight: '800' },
+
+  emptyStateContainer: { alignItems: 'center', marginTop: 40 },
+  emptyStateTitle: { fontSize: 18, fontWeight: '700', color: COLORS.obsidian, marginTop: 10 },
+  emptyStateText: { marginTop: 4, fontSize: 14, color: COLORS.gray },
+
+  // --- FLOATING CART STYLES (From Code 1) ---
   floatingCartContainer: {
     position: 'absolute',
     left: 16,

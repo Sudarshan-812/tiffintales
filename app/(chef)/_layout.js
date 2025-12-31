@@ -1,43 +1,33 @@
 import React from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-// Define theme constants locally to maintain consistency across tabs
 const THEME = {
   colors: {
-    primary: '#7E22CE', // Purple
-    gray: '#9CA3AF',
-    surface: '#FFFFFF',
-    shadow: '#000000',
-  },
-  dimensions: {
-    height: Platform.select({ ios: 85, android: 65 }),
-    paddingBottom: Platform.select({ ios: 25, android: 10 }),
+    primary: '#7E22CE', // Deep Purple
+    obsidian: '#0F172A', // Dark Professional Accent
+    gray: '#94A3B8',    // Inactive Slate
+    surface: 'rgba(255, 255, 255, 0.98)', // High-fidelity surface
+    border: '#E2E8F0',
   },
 };
 
 /**
- * Helper component to render tab icons conditionally based on focus state.
- * @param {object} props
- * @param {boolean} props.focused - Whether the tab is currently active
- * @param {string} props.color - Color passed from the tab navigator
- * @param {string} props.iconDefault - Icon name when inactive
- * @param {string} props.iconFocused - Icon name when active
+ * High-Quality Tab Icon
+ * Uniform sizing with a simple "+" for the Add section.
  */
 const TabBarIcon = ({ focused, color, iconDefault, iconFocused }) => (
-  <Ionicons
-    name={focused ? iconFocused : iconDefault}
-    size={24}
-    color={color}
-  />
+  <View style={styles.iconContainer}>
+    {focused && <View style={styles.activeIndicator} />}
+    <Ionicons
+      name={focused ? iconFocused : iconDefault}
+      size={focused ? 26 : 24} // Simple + is 26 for visual weight balance
+      color={color}
+    />
+  </View>
 );
 
-/**
- * ChefLayout
- * Layout wrapper for the Chef side of the application.
- * Manages the bottom tab navigation for Orders, Menu, and Profile.
- */
 export default function ChefLayout() {
   return (
     <Tabs
@@ -45,21 +35,17 @@ export default function ChefLayout() {
         headerShown: false,
         tabBarActiveTintColor: THEME.colors.primary,
         tabBarInactiveTintColor: THEME.colors.gray,
-        tabBarStyle: styles.tabBar,
+        tabBarShowLabel: true,
         tabBarLabelStyle: styles.tabLabel,
+        tabBarStyle: styles.tabBar,
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Orders',
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon
-              color={color}
-              focused={focused}
-              iconDefault="receipt-outline"
-              iconFocused="receipt"
-            />
+          tabBarIcon: (props) => (
+            <TabBarIcon {...props} iconDefault="receipt-outline" iconFocused="receipt" />
           ),
         }}
       />
@@ -67,14 +53,19 @@ export default function ChefLayout() {
       <Tabs.Screen
         name="menu"
         options={{
-          title: 'My Menu',
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon
-              color={color}
-              focused={focused}
-              iconDefault="restaurant-outline"
-              iconFocused="restaurant"
-            />
+          title: 'Menu',
+          tabBarIcon: (props) => (
+            <TabBarIcon {...props} iconDefault="restaurant-outline" iconFocused="restaurant" />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="add"
+        options={{
+          title: 'Add Dish',
+          tabBarIcon: (props) => (
+            <TabBarIcon {...props} iconDefault="add-outline" iconFocused="add" /> // ✅ Simple + Icon
           ),
         }}
       />
@@ -82,29 +73,9 @@ export default function ChefLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon
-              color={color}
-              focused={focused}
-              iconDefault="person-outline"
-              iconFocused="person"
-            />
-          ),
-        }}
-      />
-
-        <Tabs.Screen
-        name="add"
-        options={{
-          title: 'Add Item',
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon
-              color={color}
-              focused={focused}
-              iconDefault="add-circle-outline"
-              iconFocused="add-circle"
-            />
+          title: 'Account',
+          tabBarIcon: (props) => (
+            <TabBarIcon {...props} iconDefault="person-outline" iconFocused="person" />
           ),
         }}
       />
@@ -115,18 +86,41 @@ export default function ChefLayout() {
 const styles = StyleSheet.create({
   tabBar: {
     backgroundColor: THEME.colors.surface,
-    borderTopWidth: 0,
-    height: THEME.dimensions.height,
-    paddingBottom: THEME.dimensions.paddingBottom,
-    paddingTop: 10,
-    shadowColor: THEME.colors.shadow,
-    shadowOffset: { width: 0, height: -4 },
+    height: Platform.OS === 'ios' ? 90 : 70,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 30 : 12,
+    
+    // 🌑 Obsidian Top Separator
+    borderTopWidth: 1.5,
+    borderTopColor: THEME.colors.obsidian, 
+    
+    // Shadow for elevation
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
     shadowOpacity: 0.05,
     shadowRadius: 10,
-    elevation: 10,
+    elevation: 20,
   },
   tabLabel: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 10,
+    fontWeight: '800', // Heavy weight for professional look
+    marginTop: 4,
+    textTransform: 'uppercase', // Dashboard aesthetic
+    letterSpacing: 0.5,
+  },
+  iconContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    height: '100%',
+  },
+  activeIndicator: {
+    position: 'absolute',
+    top: -13, // Aligns perfectly with the obsidian top border
+    width: 24,
+    height: 4,
+    backgroundColor: THEME.colors.primary,
+    borderBottomLeftRadius: 6,
+    borderBottomRightRadius: 6,
   },
 });

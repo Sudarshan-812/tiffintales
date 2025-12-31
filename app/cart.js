@@ -2,18 +2,21 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  FlatList,
   TouchableOpacity,
   ScrollView,
   StyleSheet,
   TextInput,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  StatusBar,
+  Dimensions,
+  Platform,
+  Image
 } from 'react-native';
 
 // Third-party Imports
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Local Imports
@@ -21,60 +24,30 @@ import { useCart } from '../lib/store';
 import { supabase } from '../lib/supabase';
 import PaymentModal from '../components/PaymentModal';
 
-// 🎨 Theme Constants
+const { width } = Dimensions.get('window');
+
+// 🎨 Zomato/Swiggy Style Palette with Obsidian Branding
 const COLORS = {
-  background: '#F9FAFB',
-  surface: '#FFFFFF',
-  obsidian: '#111827',
-  gray: '#6B7280',
-  lightGray: '#F3F4F6',
-  green: '#10B981',
-  red: '#EF4444',
-  border: '#E5E7EB',
-  greenLight: '#ECFDF5',
-  greenBorder: '#D1FAE5',
+  bg: '#F4F6FB',        // Light gray background for contrast
+  white: '#FFFFFF',
+  obsidian: '#0F172A',  // Your Brand Primary
+  text: '#1C1C1C',      // Dark Charcoal
+  gray: '#696969',      // Subtitle Gray
+  lightGray: '#E8E8E8',
+  border: '#F0F0F0',
+  green: '#257E3E',     // Veg Green
+  red: '#D1353F',       // Non-Veg Red
+  blue: '#2563EB',      // Link Blue
 };
 
 /**
- * Visual indicator for Veg/Non-Veg items.
+ * Authentic Veg/Non-Veg Square Icon
  */
-const VegIndicator = ({ isVeg }) => (
+const VegIcon = ({ isVeg }) => (
   <View style={[styles.vegBox, { borderColor: isVeg ? COLORS.green : COLORS.red }]}>
     <View style={[styles.vegDot, { backgroundColor: isVeg ? COLORS.green : COLORS.red }]} />
   </View>
 );
-
-/**
- * CartItem Component
- * Renders individual rows in the cart list.
- */
-const CartItem = ({ item, onAdd, onRemove }) => {
-  const isVegetarian = item.is_veg !== false;
-  
-  return (
-    <View style={styles.itemRow}>
-      <View style={styles.itemInfoContainer}>
-        <VegIndicator isVeg={isVegetarian} />
-        <View style={styles.itemTextContainer}>
-          <Text style={styles.itemName}>{item.name}</Text>
-          <Text style={styles.itemPrice}>₹{item.price}</Text>
-        </View>
-      </View>
-
-      <View style={styles.counterContainer}>
-        <TouchableOpacity onPress={() => onRemove(item.id)} style={styles.counterBtn}>
-          <Ionicons name="remove" size={16} color={COLORS.green} />
-        </TouchableOpacity>
-        <Text style={styles.counterText}>{item.quantity}</Text>
-        <TouchableOpacity onPress={() => onAdd(item)} style={styles.counterBtn}>
-          <Ionicons name="add" size={16} color={COLORS.green} />
-        </TouchableOpacity>
-      </View>
-
-      <Text style={styles.rowTotal}>₹{item.price * item.quantity}</Text>
-    </View>
-  );
-};
 
 export default function CartScreen() {
   const router = useRouter();
@@ -88,39 +61,29 @@ export default function CartScreen() {
   const [instruction, setInstruction] = useState('');
   const [showPayment, setShowPayment] = useState(false);
 
-  // 💰 Bill Calculation logic
+  // 💰 Bill Logic
   const itemTotal = getCartTotal();
   const deliveryFee = getDeliveryFee();
-  const platformFee = itemTotal > 0 ? 5 : 0;
+  const platformFee = 5; 
   const gst = Math.round(itemTotal * 0.05);
   const grandTotal = itemTotal + deliveryFee + platformFee + gst;
 
-  /**
-   * Validates user session and opens payment modal.
-   */
+  // --- ACTIONS ---
   const initiateCheckout = async () => {
     if (cart.length === 0) return;
-    
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       Alert.alert('Log In Required', 'Please log in to place an order.');
       return;
     }
-    
     setShowPayment(true);
   };
 
-  /**
-   * Handles the actual order creation in Supabase.
-   * Returns true if successful, false otherwise.
-   */
   const handlePaymentConfirm = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      
       if (!cart.length) throw new Error("Cart is empty");
 
-      // 1. Create Order Record
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .insert([{
@@ -130,12 +93,10 @@ export default function CartScreen() {
           status: 'pending',
           instruction: instruction.trim()
         }])
-        .select()
-        .single();
+        .select().single();
 
       if (orderError) throw orderError;
 
-      // 2. Create Order Items
       const orderItems = cart.map(item => ({
         order_id: orderData.id,
         menu_item_id: item.id,
@@ -146,35 +107,31 @@ export default function CartScreen() {
       const { error: itemsError } = await supabase.from('order_items').insert(orderItems);
       if (itemsError) throw itemsError;
 
-      return true; // Success signal
-
+      return true;
     } catch (error) {
-      console.error("Payment Error:", error);
-      Alert.alert('Order Failed', error.message || 'Something went wrong.');
+      Alert.alert('Order Failed', error.message);
       return false;
     }
   };
 
-  /**
-   * Cleans up cart and navigates to Orders tab upon success.
-   */
   const finishOrder = () => {
     setShowPayment(false);
     clearCart();
     router.replace('/(tabs)/orders');
   };
 
-  // 🛒 Empty State
+  // 🛒 EMPTY STATE
   if (cart.length === 0) {
     return (
-      <View style={[styles.container, styles.centerContainer]}>
-        <View style={styles.emptyCircle}>
-          <Ionicons name="cart-outline" size={64} color={COLORS.gray} />
+      <View style={styles.emptyContainer}>
+        <StatusBar barStyle="dark-content" />
+        <View style={styles.emptyIconCircle}>
+          <Ionicons name="cart" size={48} color={COLORS.gray} />
         </View>
-        <Text style={styles.emptyTitle}>Your Tiffin is Empty</Text>
-        <Text style={styles.emptySubtitle}>Looks like you haven't added any food yet.</Text>
+        <Text style={styles.emptyTitle}>Good food is always cooking</Text>
+        <Text style={styles.emptySubtitle}>Your cart is empty. Add something from the menu.</Text>
         <TouchableOpacity onPress={() => router.back()} style={styles.browseBtn}>
-          <Text style={styles.browseText}>Browse Menu</Text>
+          <Text style={styles.browseBtnText}>BROWSE RESTAURANTS</Text>
         </TouchableOpacity>
       </View>
     );
@@ -182,89 +139,118 @@ export default function CartScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.obsidian} />
+      <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+      
+      {/* --- HEADER --- */}
+      <View style={[styles.header, { paddingTop: insets.top + 5 }]}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color={COLORS.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>My Cart</Text>
-        <View style={styles.headerSpacer} />
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.headerTitle}>Order Summary</Text>
+          {cart[0]?.chef_name && (
+            <Text style={styles.headerSubtitle}>from {cart[0].chef_name}</Text>
+          )}
+        </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         
-        {/* Cart Items List */}
-        <View style={styles.section}>
-          <FlatList
-            data={cart}
-            keyExtractor={item => item.id.toString()}
-            renderItem={({ item }) => (
-              <CartItem 
-                item={item} 
-                onAdd={addToCart} 
-                onRemove={removeFromCart} 
-              />
-            )}
-            scrollEnabled={false}
+        {/* --- CARD 1: ITEMS --- */}
+        <View style={styles.card}>
+          {cart.map((item) => (
+            <View key={item.id} style={styles.itemRow}>
+              <View style={styles.itemInfo}>
+                <VegIcon isVeg={item.is_veg} />
+                <View style={styles.textContainer}>
+                  <Text style={styles.itemName}>{item.name}</Text>
+                  <Text style={styles.itemPrice}>₹{item.price}</Text>
+                </View>
+              </View>
+
+              {/* Stepper */}
+              <View style={styles.stepperContainer}>
+                <TouchableOpacity onPress={() => removeFromCart(item.id)} style={styles.stepBtn}>
+                  <Ionicons name="remove" size={14} color={COLORS.green} />
+                </TouchableOpacity>
+                <Text style={styles.stepText}>{item.quantity}</Text>
+                <TouchableOpacity onPress={() => addToCart(item)} style={styles.stepBtn}>
+                  <Ionicons name="add" size={14} color={COLORS.green} />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.rowTotal}>₹{item.price * item.quantity}</Text>
+            </View>
+          ))}
+
+          <TouchableOpacity style={styles.addMoreBtn} onPress={() => router.back()}>
+            <Ionicons name="add-circle-outline" size={18} color={COLORS.gray} />
+            <Text style={styles.addMoreText}>Add more items</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* --- CARD 2: INSTRUCTIONS --- */}
+        <View style={styles.card}>
+          <View style={styles.instructionHeader}>
+            <MaterialCommunityIcons name="note-text-outline" size={18} color={COLORS.text} />
+            <Text style={styles.cardTitle}>Cooking Instructions</Text>
+          </View>
+          <TextInput 
+            placeholder="E.g. Don't ring the doorbell"
+            placeholderTextColor={COLORS.gray}
+            style={styles.input}
+            value={instruction}
+            onChangeText={setInstruction}
+            maxLength={100}
           />
         </View>
 
-        {/* Instructions Input */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Cooking Instructions</Text>
-          <View style={styles.inputBox}>
-            <Ionicons name="create-outline" size={20} color={COLORS.gray} style={styles.inputIcon} />
-            <TextInput
-              placeholder="e.g. Less spicy, no cutlery..."
-              placeholderTextColor={COLORS.gray}
-              style={styles.input}
-              value={instruction}
-              onChangeText={setInstruction}
-              maxLength={150}
-            />
-          </View>
-        </View>
-
-        {/* Bill Details */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Bill Details</Text>
+        {/* --- CARD 3: BILL SUMMARY --- */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Bill Details</Text>
+          
           <BillRow label="Item Total" value={itemTotal} />
-          <BillRow label="Delivery Fee" value={deliveryFee} />
-          <BillRow label="Platform Fee" value={platformFee} />
-          <BillRow label="GST (5%)" value={gst} />
-          <View style={styles.divider} />
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>To Pay</Text>
-            <Text style={styles.totalValue}>₹{grandTotal}</Text>
+          <BillRow label="Delivery Fee" value={deliveryFee} info />
+          <BillRow label="Platform Fee" value={platformFee} info />
+          <BillRow label="GST & Restaurant Charges" value={gst} info />
+          
+          <View style={styles.dashedDivider} />
+          
+          <View style={styles.grandTotalRow}>
+            <Text style={styles.grandTotalLabel}>To Pay</Text>
+            <Text style={styles.grandTotalValue}>₹{grandTotal}</Text>
           </View>
         </View>
 
-        {/* Trust Badge */}
-        <View style={styles.trustBadge}>
-          <Ionicons name="shield-checkmark" size={16} color={COLORS.green} />
-          <Text style={styles.trustText}>Safe & Hygienic Delivery</Text>
+        {/* --- CARD 4: POLICY --- */}
+        <View style={styles.policyContainer}>
+          <Text style={styles.policyTitle}>Cancellation Policy</Text>
+          <Text style={styles.policyText}>
+            Orders cannot be cancelled once the chef starts preparing the food. 100% cancellation fee will apply to compensate the chef.
+          </Text>
         </View>
+
       </ScrollView>
 
-      {/* Footer / Pay Button */}
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 20 }]}>
-        <View style={styles.footerInfo}>
+      {/* --- FOOTER --- */}
+      <View style={[styles.footer, { paddingBottom: insets.bottom + 10 }]}>
+        <View style={styles.footerLeft}>
           <Text style={styles.footerTotal}>₹{grandTotal}</Text>
-          <Text style={styles.footerLink}>View Bill</Text>
+          <Text style={styles.viewBillText}>VIEW BILL</Text>
         </View>
 
         <TouchableOpacity 
-          onPress={initiateCheckout} 
-          disabled={loading} 
-          style={styles.payBtn}
+          style={styles.payButton} 
+          onPress={initiateCheckout}
+          disabled={loading}
         >
           {loading ? (
             <ActivityIndicator color="white" />
           ) : (
-            <>
-              <Text style={styles.payText}>Pay Now</Text>
-              <Ionicons name="arrow-forward" size={20} color="white" />
-            </>
+            <View style={styles.payBtnContent}>
+              <Text style={styles.payBtnText}>Place Order</Text>
+              <Ionicons name="caret-forward" size={16} color="white" />
+            </View>
           )}
         </TouchableOpacity>
       </View>
@@ -280,290 +266,157 @@ export default function CartScreen() {
   );
 }
 
-// Helper Component for Bill Rows
-const BillRow = ({ label, value }) => (
+// Sub-Component for Bill Rows
+const BillRow = ({ label, value, info }) => (
   <View style={styles.billRow}>
-    <Text style={styles.billLabel}>{label}</Text>
+    <View style={{flexDirection: 'row', alignItems: 'center'}}>
+      <Text style={styles.billLabel}>{label}</Text>
+      {info && <Ionicons name="information-circle-outline" size={12} color={COLORS.gray} style={{marginLeft: 4}} />}
+    </View>
     <Text style={styles.billValue}>₹{value}</Text>
   </View>
 );
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background
-  },
-  centerContainer: {
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  scrollContent: {
-    paddingBottom: 120
-  },
+  container: { flex: 1, backgroundColor: COLORS.bg },
+  
   // Header
   header: {
+    backgroundColor: COLORS.white,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    backgroundColor: COLORS.surface,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border
+    borderBottomColor: COLORS.border,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.obsidian
-  },
-  backBtn: {
-    padding: 8,
-    borderRadius: 12,
-    backgroundColor: COLORS.lightGray
-  },
-  headerSpacer: {
-    width: 40
-  },
-  // Sections
-  section: {
-    backgroundColor: COLORS.surface,
+  backButton: { padding: 4 },
+  headerTitleContainer: { marginLeft: 12 },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
+  headerSubtitle: { fontSize: 12, color: COLORS.gray },
+
+  scrollContent: { paddingBottom: 100 },
+
+  // Cards
+  card: {
+    backgroundColor: COLORS.white,
+    marginHorizontal: 12,
     marginTop: 12,
-    padding: 20,
-    borderRadius: 16,
-    marginHorizontal: 16,
+    borderRadius: 12,
+    padding: 16,
+    // Gentle Shadow
     shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 10,
-    elevation: 2
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: COLORS.obsidian,
-    marginBottom: 12,
-    letterSpacing: 0.5
-  },
-  // Cart Item
-  itemRow: {
+
+  // Item Row
+  itemRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+  itemInfo: { flexDirection: 'row', alignItems: 'flex-start', flex: 1 },
+  textContainer: { marginLeft: 10 },
+  itemName: { fontSize: 14, fontWeight: '500', color: COLORS.text, width: 120 },
+  itemPrice: { fontSize: 13, fontWeight: '600', color: COLORS.text, marginTop: 2 },
+  
+  // Veg Icon
+  vegBox: { width: 14, height: 14, borderWidth: 1, borderRadius: 3, alignItems: 'center', justifyContent: 'center', marginTop: 3 },
+  vegDot: { width: 8, height: 8, borderRadius: 4 },
+
+  // Stepper
+  stepperContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16
-  },
-  itemInfoContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'flex-start'
-  },
-  itemTextContainer: {
-    marginLeft: 8
-  },
-  itemName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.obsidian
-  },
-  itemPrice: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: COLORS.gray,
-    marginTop: 2
-  },
-  rowTotal: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.obsidian,
-    width: 50,
-    textAlign: 'right'
-  },
-  vegBox: {
-    width: 16,
-    height: 16,
     borderWidth: 1,
-    borderRadius: 4,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 3
+    borderColor: COLORS.lightGray,
+    borderRadius: 6,
+    backgroundColor: '#FAFAFA',
+    height: 30,
   },
-  vegDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4
-  },
-  counterContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.greenLight,
+  stepBtn: { width: 28, alignItems: 'center', justifyContent: 'center', height: '100%' },
+  stepText: { fontSize: 13, fontWeight: '700', color: COLORS.green, width: 20, textAlign: 'center' },
+  
+  rowTotal: { fontSize: 13, fontWeight: '600', color: COLORS.text, width: 50, textAlign: 'right' },
+
+  addMoreBtn: { flexDirection: 'row', alignItems: 'center', paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.border },
+  addMoreText: { marginLeft: 8, fontSize: 13, color: COLORS.text },
+
+  // Instructions
+  instructionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  cardTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text, marginLeft: 6 },
+  input: {
+    backgroundColor: '#F9F9F9',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: COLORS.greenBorder,
-    paddingVertical: 4,
-    paddingHorizontal: 4
+    borderColor: COLORS.lightGray,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+    color: COLORS.text
   },
-  counterBtn: {
-    padding: 4
-  },
-  counterText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: COLORS.green,
-    marginHorizontal: 8
-  },
-  // Input
-  inputBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingHorizontal: 12
-  },
-  inputIcon: {
-    marginRight: 8
-  },
-  input: {
-    flex: 1,
-    paddingVertical: 12,
-    color: COLORS.obsidian,
-    fontSize: 14
-  },
+
   // Bill
-  billRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8
-  },
-  billLabel: {
-    fontSize: 14,
-    color: COLORS.gray
-  },
-  billValue: {
-    fontSize: 14,
-    color: COLORS.obsidian,
-    fontWeight: '500'
-  },
-  divider: {
+  billRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
+  billLabel: { fontSize: 13, color: COLORS.gray },
+  billValue: { fontSize: 13, color: COLORS.text },
+  dashedDivider: {
     height: 1,
-    backgroundColor: COLORS.border,
-    marginVertical: 12,
-    borderStyle: 'dashed',
     borderWidth: 1,
-    borderColor: COLORS.border
+    borderColor: COLORS.lightGray,
+    borderStyle: 'dashed',
+    marginVertical: 12,
+    borderRadius: 1
   },
-  totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between'
-  },
-  totalLabel: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.obsidian
-  },
-  totalValue: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.obsidian
-  },
-  // Trust Badge
-  trustBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 24,
-    backgroundColor: COLORS.greenLight,
-    padding: 12,
-    borderRadius: 12,
-    marginHorizontal: 16
-  },
-  trustText: {
-    color: COLORS.green,
-    fontWeight: '700',
-    marginLeft: 8,
-    fontSize: 12
-  },
+  grandTotalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  grandTotalLabel: { fontSize: 16, fontWeight: '700', color: COLORS.text },
+  grandTotalValue: { fontSize: 16, fontWeight: '800', color: COLORS.text },
+
+  // Policy
+  policyContainer: { margin: 16, padding: 12, backgroundColor: '#F0F3F8', borderRadius: 8, borderWidth: 1, borderColor: '#E5E9F0' },
+  policyTitle: { fontSize: 12, fontWeight: '700', color: COLORS.gray, marginBottom: 4 },
+  policyText: { fontSize: 11, color: COLORS.gray, lineHeight: 16 },
+
   // Footer
   footer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: COLORS.surface,
-    padding: 20,
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 16,
     paddingTop: 16,
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
+    elevation: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 10
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
-  footerInfo: {
-    justifyContent: 'center'
-  },
-  footerTotal: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: COLORS.obsidian
-  },
-  footerLink: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.green
-  },
-  payBtn: {
-    backgroundColor: COLORS.obsidian,
-    flexDirection: 'row',
+  footerLeft: { flexDirection: 'column' },
+  footerTotal: { fontSize: 18, fontWeight: '800', color: COLORS.text },
+  viewBillText: { fontSize: 11, fontWeight: '700', color: COLORS.green, marginTop: 2 },
+  
+  payButton: {
+    backgroundColor: COLORS.obsidian, // ✅ Premium Obsidian CTA
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
     alignItems: 'center',
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 16,
-    shadowColor: COLORS.obsidian,
-    shadowOpacity: 0.3,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 5
-  },
-  payText: {
-    color: 'white',
-    fontWeight: '800',
-    fontSize: 16,
-    marginRight: 8
-  },
-  // Empty State
-  emptyCircle: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: COLORS.lightGray,
     justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24
+    width: '50%',
   },
-  emptyTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: COLORS.obsidian,
-    marginBottom: 8
-  },
-  emptySubtitle: {
-    fontSize: 16,
-    color: COLORS.gray,
-    marginBottom: 32,
-    textAlign: 'center'
-  },
-  browseBtn: {
-    backgroundColor: COLORS.obsidian,
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 16
-  },
-  browseText: {
-    color: 'white',
-    fontWeight: '800',
-    fontSize: 16
-  },
+  payBtnContent: { flexDirection: 'row', alignItems: 'center' },
+  payBtnText: { color: COLORS.white, fontSize: 15, fontWeight: '700', marginRight: 6 },
+
+  // Empty State
+  emptyContainer: { flex: 1, backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center', padding: 32 },
+  emptyIconCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: COLORS.bg, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text, marginBottom: 8 },
+  emptySubtitle: { fontSize: 14, color: COLORS.gray, textAlign: 'center', marginBottom: 24 },
+  browseBtn: { borderWidth: 1, borderColor: COLORS.obsidian, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 8 },
+  browseBtnText: { color: COLORS.obsidian, fontWeight: '800', fontSize: 13 },
 });

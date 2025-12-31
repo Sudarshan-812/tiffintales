@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   Modal,
   View,
@@ -6,210 +6,198 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Animated
+  Animated,
+  Dimensions
 } from 'react-native';
-
-// Third-party Imports
 import { Ionicons } from '@expo/vector-icons';
+import LottieView from 'lottie-react-native';
 
-// 🎨 Premium Theme Palette
+const { height } = Dimensions.get('window');
+
+// 🎨 Obsidian + Cream Theme Palette
 const COLORS = {
   overlay: 'rgba(0,0,0,0.6)',
   surface: '#FFFFFF',
-  primary: '#7E22CE',
-  obsidian: '#111827',
-  gray: '#6B7280',
-  lightGray: '#F3F4F6',
-  border: '#E5E7EB',
-  success: '#10B981',
-  successLight: '#DCFCE7',
-  selectedBg: '#FBF7FF',
+  obsidian: '#0F172A',  // Main Brand Color
+  cream: '#FEF3C7',     // Accent Color
+  gray: '#64748B',
+  lightGray: '#F8FAFC',
+  border: '#E2E8F0',
+  green: '#10B981',
+  selectedBg: '#FFFBEB',
 };
 
-/**
- * PaymentMethodCard Component
- * Renders a selectable payment option row.
- */
-const PaymentMethodCard = ({ id, title, subtitle, icon, color, isSelected, onSelect }) => (
+const PaymentMethodCard = ({ id, title, subtitle, icon, isSelected, onSelect }) => (
   <TouchableOpacity
     activeOpacity={0.9}
-    onPress={() => onSelect(id)}
+    onPress={() => onSelect(id, title)}
     style={[styles.methodCard, isSelected && styles.methodCardSelected]}
   >
     <View style={styles.cardContent}>
-      <View style={[styles.iconBox, { backgroundColor: isSelected ? COLORS.primary : '#F9FAFB' }]}>
-        <Ionicons name={icon} size={22} color={isSelected ? 'white' : color} />
+      <View style={[styles.iconBox, { backgroundColor: isSelected ? COLORS.obsidian : COLORS.lightGray }]}>
+        <Ionicons name={icon} size={20} color={isSelected ? COLORS.cream : COLORS.gray} />
       </View>
-      <View style={styles.textContainer}>
-        <Text style={[styles.methodTitle, isSelected && { color: COLORS.primary }]}>{title}</Text>
+      <View style={styles.methodTextContainer}>
+        <Text style={[styles.methodTitle, isSelected && { color: COLORS.obsidian }]}>{title}</Text>
         <Text style={styles.methodSubtitle}>{subtitle}</Text>
       </View>
     </View>
-    <View style={[styles.radioOuter, isSelected && { borderColor: COLORS.primary }]}>
+    <View style={[styles.radioOuter, isSelected && { borderColor: COLORS.obsidian }]}>
       {isSelected && <View style={styles.radioInner} />}
     </View>
   </TouchableOpacity>
 );
 
-/**
- * PaymentModal
- * Handles payment method selection, processing simulation, and success confirmation.
- *
- * @param {object} props
- * @param {boolean} props.visible - Controls modal visibility
- * @param {number} props.amount - Total amount to pay
- * @param {function} props.onClose - Callback to close modal without paying
- * @param {function} props.onConfirmPayment - Async function to process DB transaction
- * @param {function} props.onFinish - Callback after success (navigates away)
- */
-export default function PaymentModal({ visible, amount, onClose, onConfirmPayment, onFinish }) {
+export default function PaymentModal({ visible, amount, onClose, onConfirmPayment, onSelectMethod, onFinish }) {
   const [status, setStatus] = useState('select'); // 'select' | 'processing' | 'success'
   const [selectedMethod, setSelectedMethod] = useState('upi');
+  
+  const slideAnim = useRef(new Animated.Value(height)).current;
 
-  // Animation Refs
-  const slideAnim = useRef(new Animated.Value(500)).current;
-  const scaleAnim = useRef(new Animated.Value(0)).current;
-
-  // 1. Handle Entrance/Exit Animations
   useEffect(() => {
     if (visible) {
       setStatus('select');
-      Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, friction: 8 }).start();
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        friction: 8,
+        tension: 60
+      }).start();
     } else {
-      slideAnim.setValue(500);
+      slideAnim.setValue(height);
     }
   }, [visible]);
 
-  // 2. Handle Success Icon Animation
-  useEffect(() => {
-    if (status === 'success') {
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        friction: 5,
-        tension: 40,
-        useNativeDriver: true
-      }).start();
-    } else {
-      scaleAnim.setValue(0);
-    }
-  }, [status]);
+  const handleSelect = (methodId, label) => {
+    setSelectedMethod(methodId);
+    if (onSelectMethod) onSelectMethod(label);
+  };
 
-  /**
-   * Orchestrates the payment flow.
-   */
   const handlePay = async () => {
     setStatus('processing');
-
-    // Simulate Network Delay for UX
+    
+    // 1. Simulate Network Delay
     await new Promise(resolve => setTimeout(resolve, 2000));
 
-    // Execute actual payment logic passed from parent
-    const success = await onConfirmPayment();
+    // 2. Mock Success Logic
+    let success = true;
+    if (onConfirmPayment) {
+        try {
+            const result = await onConfirmPayment();
+            if (result === false) success = false;
+        } catch (e) {
+            console.log("Payment Error:", e);
+        }
+    }
 
     if (success) {
-      setStatus('success');
+        setStatus('success'); 
+        // Note: We removed the auto-close timeout here so the user sees the button
     } else {
-      setStatus('select');
+        setStatus('select');
+    }
+  };
+
+  const handleDone = () => {
+    onClose(); 
+    // This triggers the redirection logic passed from CartScreen
+    if (onFinish) {
+        setTimeout(() => onFinish(), 300); // Small delay for smooth modal close
     }
   };
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
+        <TouchableOpacity style={styles.overlayTouch} onPress={status === 'success' ? handleDone : onClose} activeOpacity={1} />
+
         <Animated.View style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}>
-
-          {/* 🟢 SUCCESS STATE */}
-          {status === 'success' ? (
-            <View style={styles.successContainer}>
-              
-              <Animated.View style={[styles.successIconOuter, { transform: [{ scale: scaleAnim }] }]}>
-                <View style={styles.successIconInner}>
-                  <Ionicons name="checkmark-sharp" size={50} color="white" />
-                </View>
-              </Animated.View>
-
-              <Text style={styles.successTitle}>Order Confirmed!</Text>
-              <Text style={styles.successSubtitle}>
-                Your chef has received the order{"\n"}and will start cooking shortly.
-              </Text>
-
-              <View style={styles.receiptBox}>
-                <Text style={styles.receiptLabel}>AMOUNT PAID</Text>
-                <Text style={styles.receiptValue}>₹{amount}.00</Text>
+          
+          {/* --- HEADER (Hidden on Success) --- */}
+          {status !== 'success' && (
+            <View style={styles.header}>
+              <View>
+                <Text style={styles.headerTitle}>Checkout</Text>
+                <Text style={styles.headerSubtitle}>Secure Payment Gateway</Text>
               </View>
-
-              <TouchableOpacity style={styles.trackButton} onPress={onFinish} activeOpacity={0.8}>
-                <Text style={styles.trackButtonText}>Track Order Status</Text>
-                <Ionicons name="arrow-forward" size={18} color="white" />
-              </TouchableOpacity>
-
+              {status !== 'processing' && (
+                <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+                  <Ionicons name="close" size={20} color={COLORS.obsidian} />
+                </TouchableOpacity>
+              )}
             </View>
-          ) : (
-            // 📝 NORMAL & PROCESSING STATES
-            <>
-              {/* Header */}
-              <View style={styles.header}>
-                <View>
-                  <Text style={styles.headerTitle}>Checkout</Text>
-                  <Text style={styles.headerSubtitle}>Secure Payment Gateway</Text>
-                </View>
-                {status !== 'processing' && (
-                  <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                    <Ionicons name="close" size={20} color={COLORS.obsidian} />
-                  </TouchableOpacity>
-                )}
-              </View>
+          )}
 
-              {/* Total Amount Display */}
+          {/* --- CONTENT BASED ON STATUS --- */}
+          {status === 'processing' ? (
+             <View style={styles.centerContainer}>
+               <ActivityIndicator size={50} color={COLORS.obsidian} />
+               <Text style={styles.processingTitle}>Processing Payment...</Text>
+               <Text style={styles.processingSubtitle}>Please do not close the app</Text>
+             </View>
+
+          ) : status === 'success' ? (
+             <View style={styles.centerContainer}>
+               {/* ✅ SUCCESS LOTTIE ANIMATION */}
+               <LottieView
+                 source={{ uri: 'https://lottie.host/b9edd07b-2a52-4486-92f8-39a7f511ac00/XmAfnVpIpc.lottie' }}
+                 autoPlay
+                 loop={false}
+                 style={{ width: 220, height: 220 }}
+               />
+               <Text style={styles.successTitle}>Order Placed!</Text>
+               <Text style={styles.successSubtitle}>Your tiffin is being prepared.</Text>
+
+               {/* ✅ NEW DONE BUTTON */}
+               <TouchableOpacity 
+                 style={styles.doneButton} 
+                 onPress={handleDone}
+                 activeOpacity={0.8}
+               >
+                 <Text style={styles.doneButtonText}>Done</Text>
+                 <Ionicons name="checkmark-circle" size={20} color={COLORS.cream} />
+               </TouchableOpacity>
+             </View>
+
+          ) : (
+            <>
+              {/* --- DEFAULT PAYMENT FORM --- */}
               <View style={styles.amountContainer}>
                 <View>
                   <Text style={styles.totalLabel}>TOTAL TO PAY</Text>
                   <Text style={styles.totalValue}>₹{amount}.00</Text>
                 </View>
                 <View style={styles.secureBadge}>
-                  <Ionicons name="lock-closed" size={12} color={COLORS.success} />
+                  <Ionicons name="lock-closed" size={12} color={COLORS.obsidian} />
                   <Text style={styles.secureText}>256-BIT SECURE</Text>
                 </View>
               </View>
 
-              {/* Processing View */}
-              {status === 'processing' ? (
-                <View style={styles.processingContainer}>
-                  <View style={styles.spinnerBg}>
-                    <ActivityIndicator size={40} color={COLORS.primary} />
-                  </View>
-                  <Text style={styles.processingTitle}>Processing Payment...</Text>
-                  <Text style={styles.processingSubtitle}>Please do not close the app</Text>
-                </View>
-              ) : (
-                // Selection View
-                <>
-                  <Text style={styles.sectionLabel}>PAYMENT METHOD</Text>
-                  <View style={styles.methodsContainer}>
-                    <PaymentMethodCard 
-                      id="upi" title="UPI / Google Pay" subtitle="Fast & Secure" icon="qr-code" color="#16A34A" 
-                      isSelected={selectedMethod === 'upi'} onSelect={setSelectedMethod} 
-                    />
-                    <PaymentMethodCard 
-                      id="card" title="Credit / Debit Card" subtitle="Visa, Mastercard" icon="card" color="#2563EB" 
-                      isSelected={selectedMethod === 'card'} onSelect={setSelectedMethod} 
-                    />
-                    <PaymentMethodCard 
-                      id="cod" title="Cash on Delivery" subtitle="Pay at doorstep" icon="cash" color="#D97706" 
-                      isSelected={selectedMethod === 'cod'} onSelect={setSelectedMethod} 
-                    />
-                  </View>
+              <Text style={styles.sectionLabel}>PAYMENT METHOD</Text>
+              
+              <View style={styles.methodsList}>
+                <PaymentMethodCard 
+                  id="upi" title="UPI / Google Pay" subtitle="Instant Payment" icon="qr-code" 
+                  isSelected={selectedMethod === 'upi'} onSelect={handleSelect} 
+                />
+                <PaymentMethodCard 
+                  id="card" title="Credit / Debit Card" subtitle="Visa, Mastercard" icon="card" 
+                  isSelected={selectedMethod === 'card'} onSelect={handleSelect} 
+                />
+                <PaymentMethodCard 
+                  id="cod" title="Cash on Delivery" subtitle="Pay at doorstep" icon="cash" 
+                  isSelected={selectedMethod === 'cod'} onSelect={handleSelect} 
+                />
+              </View>
 
-                  <TouchableOpacity style={styles.payButton} onPress={handlePay} activeOpacity={0.8}>
-                    <Text style={styles.payButtonText}>Pay ₹{amount}</Text>
-                    <Ionicons name="shield-checkmark" size={18} color="white" />
-                  </TouchableOpacity>
+              <TouchableOpacity style={styles.payButton} onPress={handlePay} activeOpacity={0.8}>
+                <Text style={styles.payButtonText}>Pay ₹{amount}</Text>
+                <Ionicons name="arrow-forward" size={20} color={COLORS.cream} />
+              </TouchableOpacity>
 
-                  <View style={styles.footer}>
-                    <Text style={styles.footerText}>Secured by Razorpay</Text>
-                  </View>
-                </>
-              )}
+              <View style={styles.footer}>
+                <Text style={styles.footerText}>Secured by Razorpay</Text>
+              </View>
             </>
           )}
 
@@ -225,14 +213,23 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.overlay,
     justifyContent: 'flex-end',
   },
+  overlayTouch: {
+    flex: 1,
+  },
   sheet: {
     backgroundColor: COLORS.surface,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
     padding: 24,
     paddingBottom: 40,
-    minHeight: 520,
+    minHeight: 550,
+    elevation: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
   },
+  
   // Header
   header: {
     flexDirection: 'row',
@@ -241,7 +238,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 24,
-    fontWeight: '800',
+    fontWeight: '900',
     color: COLORS.obsidian,
     letterSpacing: -0.5,
   },
@@ -255,8 +252,10 @@ const styles = StyleSheet.create({
     padding: 8,
     backgroundColor: COLORS.lightGray,
     borderRadius: 20,
+    alignSelf: 'flex-start',
   },
-  // Amount
+
+  // Amount Section
   amountContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -268,20 +267,20 @@ const styles = StyleSheet.create({
   },
   totalLabel: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '800',
     color: COLORS.gray,
     letterSpacing: 1,
     marginBottom: 4,
   },
   totalValue: {
-    fontSize: 28,
-    fontWeight: '800',
+    fontSize: 32,
+    fontWeight: '900',
     color: COLORS.obsidian,
   },
   secureBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.successLight,
+    backgroundColor: COLORS.cream, 
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
@@ -289,20 +288,21 @@ const styles = StyleSheet.create({
   secureText: {
     fontSize: 10,
     fontWeight: '800',
-    color: COLORS.success,
+    color: COLORS.obsidian,
     marginLeft: 6,
   },
+
   // Selection
   sectionLabel: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
     color: COLORS.gray,
-    marginBottom: 12,
+    marginBottom: 16,
     marginLeft: 4,
   },
-  methodsContainer: {
+  methodsList: {
     gap: 12,
-    marginBottom: 24,
+    marginBottom: 30,
   },
   methodCard: {
     flexDirection: 'row',
@@ -310,12 +310,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 16,
     backgroundColor: COLORS.surface,
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
   methodCardSelected: {
-    borderColor: COLORS.primary,
+    borderColor: COLORS.obsidian,
     backgroundColor: COLORS.selectedBg,
   },
   cardContent: {
@@ -324,17 +324,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   iconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 48,
+    height: 48,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  textContainer: {
-    marginLeft: 14,
+  methodTextContainer: {
+    marginLeft: 16,
   },
   methodTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     color: COLORS.obsidian,
   },
@@ -342,6 +342,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.gray,
     marginTop: 2,
+    fontWeight: '500',
   },
   radioOuter: {
     width: 22,
@@ -356,27 +357,28 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.obsidian,
   },
+
   // Pay Button
   payButton: {
-    backgroundColor: COLORS.primary,
-    height: 60,
-    borderRadius: 18,
+    backgroundColor: COLORS.obsidian,
+    height: 64,
+    borderRadius: 24,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    marginTop: 12,
-    shadowColor: COLORS.primary,
-    shadowOpacity: 0.3,
+    gap: 12,
+    marginTop: 10,
+    shadowColor: COLORS.obsidian,
+    shadowOpacity: 0.4,
     shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
+    elevation: 10,
   },
   payButtonText: {
-    color: 'white',
+    color: COLORS.cream, 
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '900',
   },
   footer: {
     alignItems: 'center',
@@ -384,116 +386,61 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   footerText: {
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.gray,
     fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
-  // Processing
-  processingContainer: {
+
+  // Processing & Success State
+  centerContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 300,
-  },
-  spinnerBg: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: COLORS.lightGray,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
+    minHeight: 400, // Taller to fit the done button comfortably
   },
   processingTitle: {
     fontSize: 20,
     fontWeight: '800',
     color: COLORS.obsidian,
+    marginTop: 20,
     marginBottom: 8,
   },
   processingSubtitle: {
     fontSize: 14,
     color: COLORS.gray,
   },
-  // Success Screen
-  successContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 20,
-  },
-  successIconOuter: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: COLORS.successLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  successIconInner: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: COLORS.success,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: COLORS.success,
-    shadowOpacity: 0.4,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 10,
-  },
   successTitle: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '900',
     color: COLORS.obsidian,
-    marginBottom: 8,
-    letterSpacing: -0.5,
+    marginTop: 10,
   },
   successSubtitle: {
-    fontSize: 15,
+    fontSize: 16,
     color: COLORS.gray,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 32,
+    marginTop: 5,
+    marginBottom: 30,
   },
-  receiptBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: COLORS.lightGray,
-    width: '100%',
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 32,
-  },
-  receiptLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.gray,
-    letterSpacing: 0.5,
-  },
-  receiptValue: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.obsidian,
-  },
-  trackButton: {
-    width: '100%',
+  // ✅ NEW DONE BUTTON STYLES
+  doneButton: {
     backgroundColor: COLORS.obsidian,
-    height: 56,
-    borderRadius: 16,
+    paddingHorizontal: 40,
+    paddingVertical: 16,
+    borderRadius: 30,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 10,
     shadowColor: COLORS.obsidian,
     shadowOpacity: 0.3,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 5,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 10,
   },
-  trackButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '700',
+  doneButtonText: {
+    color: COLORS.cream,
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: 0.5,
   },
 });

@@ -5,289 +5,192 @@ import {
   StyleSheet,
   Animated,
   Dimensions,
-  Image,
-  Easing
+  Easing,
+  Platform
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import LottieView from 'lottie-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
 
-// Premium Dark Theme Palette
+// 🎨 Premium Dark Purple Palette
 const COLORS = {
-  background: '#111827',   // Obsidian
-  surface: '#1F2937',      // Dark Gray
+  bgStart: '#2E1065', // Deep Purple
+  bgEnd: '#0F172A',   // Obsidian
+  primary: '#C084FC', // Lavender Accent
   white: '#FFFFFF',
-  primary: '#C084FC',      // Bright Purple Accent
-  gold: '#FBBF24',         // Subtle Gold
-  textGray: '#9CA3AF',
-  border: 'rgba(255, 255, 255, 0.1)',
+  glass: 'rgba(255, 255, 255, 0.1)',
+  glassBorder: 'rgba(255, 255, 255, 0.15)',
 };
 
-/**
- * AnimatedSplash Component
- * A premium, dark-themed splash screen with staggered entrance animations.
- * @param {function} onFinish - Callback triggered when animation completes.
- */
 export default function AnimatedSplash({ onFinish }) {
-  // Animation Values
-  const logoScale = useRef(new Animated.Value(0)).current;
-  const logoOpacity = useRef(new Animated.Value(0)).current;
-  const textTranslateY = useRef(new Animated.Value(20)).current;
-  const textOpacity = useRef(new Animated.Value(0)).current;
-  const bgRotate = useRef(new Animated.Value(0)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+  const textTranslateY = useRef(new Animated.Value(30)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
 
   useEffect(() => {
-    // 1. Background Slow Rotation (Continuous)
-    Animated.loop(
-      Animated.timing(bgRotate, {
-        toValue: 1,
-        duration: 20000, // Very slow rotation
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    ).start();
-
-    // 2. Entrance Sequence
     Animated.sequence([
-      // A. Logo Pop In
+      // 1. Entrance (0.8s)
       Animated.parallel([
-        Animated.spring(logoScale, {
+        Animated.timing(opacityAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
           toValue: 1,
           friction: 6,
           tension: 40,
           useNativeDriver: true,
         }),
-        Animated.timing(logoOpacity, {
-          toValue: 1,
-          duration: 600,
-          useNativeDriver: true,
-        }),
-      ]),
-
-      // B. Text Slide Up (Staggered)
-      Animated.parallel([
         Animated.timing(textTranslateY, {
           toValue: 0,
-          duration: 500,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(textOpacity, {
-          toValue: 1,
-          duration: 500,
+          duration: 800,
+          easing: Easing.out(Easing.back(1.5)), // Slight bounce up for text
           useNativeDriver: true,
         }),
       ]),
 
-      // C. Hold Phase (Showcase brand)
-      Animated.delay(2000),
+      // 2. Hold (3s)
+      Animated.delay(3000), //3000
 
-    ]).start(() => {
-      if (onFinish) onFinish();
+      // 3. Exit (0.5s)
+      Animated.timing(opacityAnim, {
+        toValue: 0,
+        duration: 500,   //500
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished && onFinish) onFinish();
     });
   }, []);
-
-  // Interpolations
-  const rotateInterpolate = bgRotate.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
 
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
 
-      {/* Decorative Background Elements */}
-      <Animated.View style={[styles.bgCircleContainer, { transform: [{ rotate: rotateInterpolate }] }]}>
-        <View style={[styles.bgCircle, styles.circleOne]} />
-        <View style={[styles.bgCircle, styles.circleTwo]} />
-      </Animated.View>
+      {/* 🟣 Background */}
+      <LinearGradient
+        colors={[COLORS.bgStart, COLORS.bgEnd]}
+        style={StyleSheet.absoluteFill}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      />
 
-      {/* Main Content */}
-      <View style={styles.contentContainer}>
+      <Animated.View style={[styles.contentContainer, { opacity: opacityAnim }]}>
         
-        {/* Logo Section */}
-        <Animated.View style={{ transform: [{ scale: logoScale }], opacity: logoOpacity }}>
-          <View style={styles.logoWrapper}>
-            <Image
-              source={require('../assets/loginlogo.png')}
-              style={styles.logoImage}
-            />
-          </View>
+        {/* LOTTIE ANIMATION */}
+        <Animated.View style={[styles.lottieWrapper, { transform: [{ scale: scaleAnim }] }]}>
+          <LottieView
+            source={{ uri: 'https://lottie.host/e02d6370-b109-4d7e-ba09-a8f72e71bef1/gI994HU1ud.lottie' }}
+            autoPlay
+            loop
+            style={styles.lottie}
+            resizeMode="contain"
+          />
         </Animated.View>
 
-        {/* Text Section */}
+        {/* TYPOGRAPHY SECTION */}
         <Animated.View 
           style={{ 
-            opacity: textOpacity, 
             transform: [{ translateY: textTranslateY }],
             alignItems: 'center',
-            marginTop: 32
+            marginTop: 20 
           }}
         >
+          {/* Main Title */}
           <Text style={styles.brandTitle}>
-            TIFFIN<Text style={styles.brandAccent}>TALES</Text>
+            Tiffin<Text style={styles.brandAccent}>Tales</Text>
           </Text>
           
-          <View style={styles.divider} />
-          
-          <Text style={styles.tagline}>
-            HOMEMADE HAPPINESS
-          </Text>
-          
-          <View style={styles.featuresRow}>
-            <FeatureBadge icon="check-decagram" text="Fresh" />
-            <View style={styles.dot} />
-            <FeatureBadge icon="flash" text="Fast" />
-            <View style={styles.dot} />
-            <FeatureBadge icon="heart" text="Local" />
+          {/* Glass Pill Tagline */}
+          <View style={styles.taglinePill}>
+            <Text style={styles.taglineText}>HOMEMADE HAPPINESS</Text>
           </View>
+
         </Animated.View>
 
-      </View>
+      </Animated.View>
 
       {/* Footer */}
-      <Animated.View style={[styles.footer, { opacity: textOpacity }]}>
-        <Text style={styles.footerText}>v1.0.2</Text>
+      <Animated.View style={[styles.footer, { opacity: opacityAnim }]}>
+        <Text style={styles.footerText}>v1.0.0</Text>
       </Animated.View>
     </View>
   );
 }
 
-/**
- * Helper component for small feature text rows
- */
-const FeatureBadge = ({ icon, text }) => (
-  <View style={styles.featureItem}>
-    <MaterialCommunityIcons name={icon} size={14} color={COLORS.primary} />
-    <Text style={styles.featureText}>{text}</Text>
-  </View>
-);
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
     justifyContent: 'center',
     alignItems: 'center',
-    overflow: 'hidden',
+    backgroundColor: COLORS.bgEnd,
   },
-  
-  // Background Decorations
-  bgCircleContainer: {
-    position: 'absolute',
-    width: width * 1.5,
-    height: width * 1.5,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  bgCircle: {
-    position: 'absolute',
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.03)',
-  },
-  circleOne: {
-    width: width * 0.8,
-    height: width * 0.8,
-    borderStyle: 'dashed',
-  },
-  circleTwo: {
-    width: width * 1.2,
-    height: width * 1.2,
-    opacity: 0.5,
-  },
-
-  // Content
   contentContainer: {
     alignItems: 'center',
-    zIndex: 10,
+    width: '100%',
+    paddingHorizontal: 20,
   },
-  logoWrapper: {
-    width: width * 0.45,
-    height: width * 0.45,
-    borderRadius: 40,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+  
+  // Animation
+  lottieWrapper: {
+    width: width * 0.75, 
+    height: width * 0.75,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
   },
-  logoImage: {
-    width: '80%',
-    height: '80%',
-    resizeMode: 'contain',
+  lottie: {
+    width: '100%',
+    height: '100%',
   },
 
-  // Typography
+  // Typography Redesign
   brandTitle: {
-    fontSize: 32,
-    fontWeight: '900',
+    fontSize: 42,
+    // iOS gets Avenir Next (Premium), Android gets sans-serif-medium
+    fontFamily: Platform.OS === 'ios' ? 'Avenir Next' : 'sans-serif-medium',
+    fontWeight: '700', 
     color: COLORS.white,
-    letterSpacing: 2,
+    letterSpacing: -1, // Tighter spacing looks more modern
+    marginBottom: 16,
+    textShadowColor: 'rgba(0,0,0,0.2)',
+    textShadowOffset: { width: 0, height: 4 },
+    textShadowRadius: 10,
   },
   brandAccent: {
     color: COLORS.primary,
-  },
-  divider: {
-    width: 40,
-    height: 3,
-    backgroundColor: COLORS.primary,
-    borderRadius: 2,
-    marginVertical: 16,
-  },
-  tagline: {
-    fontSize: 14,
-    color: COLORS.white,
-    fontWeight: '600',
-    letterSpacing: 4,
-    marginBottom: 24,
+    fontWeight: '800', // Slightly heavier for the accent part
+    fontStyle: 'italic', // Adds a bit of flair
   },
   
-  // Features Row
-  featuresRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    paddingVertical: 8,
+  // Tagline Glass Pill
+  taglinePill: {
+    backgroundColor: COLORS.glass,
     paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderColor: COLORS.glassBorder,
   },
-  featureItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  featureText: {
-    color: COLORS.textGray,
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  dot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: COLORS.textGray,
-    marginHorizontal: 12,
-    opacity: 0.5,
+  taglineText: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: '700',
+    letterSpacing: 2, // Wide spacing for tagline
+    textTransform: 'uppercase',
   },
 
   // Footer
   footer: {
     position: 'absolute',
-    bottom: 40,
+    bottom: 50,
   },
   footerText: {
-    color: 'rgba(255,255,255,0.2)',
+    color: 'rgba(255,255,255,0.3)',
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
 });

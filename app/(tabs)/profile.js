@@ -5,9 +5,11 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
   Switch,
-  ActivityIndicator
+  StatusBar,
+  Alert,
+  ActivityIndicator,
+  Dimensions
 } from 'react-native';
 
 // Third-party Imports
@@ -17,49 +19,29 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Local Imports
 import { supabase } from '../../lib/supabase';
-import { getCurrentLocation } from '../../lib/location';
 
-// 🎨 Premium Obsidian + Cream Theme
+const { width } = Dimensions.get('window');
+
+// 🎨 Updated Premium Theme
 const COLORS = {
-  background: '#FDFBF7',      // Cream Background
-  surface: '#FFFFFF',         // White Card
-  obsidian: '#111827',        // Main Dark Color
-  primary: '#7E22CE',         // Purple Accent
-  primaryLight: '#F3E8FF',    // Light Purple
-  text: '#1F293B',            // Dark Gray Text
-  subtext: '#64748B',         // Light Gray Text
+  background: '#F9FAFB',
+  surface: '#FFFFFF',
+  obsidian: '#111827',
+  primary: '#7E22CE',
+  primaryLight: '#F3E8FF',
+  text: '#1F293B',
+  subtext: '#64748B',
   border: '#E2E8F0',
   red: '#EF4444',
-  redLight: '#FEF2F2',
-  blueLight: '#DBEAFE',
-  blue: '#2563EB',
-  orangeLight: '#FFEDD5',
-  orange: '#F97316',
-  successBg: '#F0FDF4',
-  successBorder: '#DCFCE7',
-  successText: '#16A34A',
+  gold: '#F59E0B',
+  blue: '#3B82F6',
+  green: '#10B981',
 };
 
-/**
- * MenuItem Component
- * Renders a customizable row for settings/actions.
- * Extracted to prevent re-renders.
- */
-const MenuItem = ({
-  icon,
-  color,
-  bg,
-  label,
-  subtext,
-  onPress,
-  hasSwitch,
-  isDestructive,
-  switchValue,
-  onSwitchChange
-}) => (
+const MenuItem = ({ icon, color, bg, label, subtext, onPress, hasSwitch, switchValue, onSwitchChange, badge, isDestructive }) => (
   <TouchableOpacity
     onPress={onPress}
-    activeOpacity={0.7}
+    activeOpacity={0.6}
     disabled={hasSwitch}
     style={styles.menuItem}
   >
@@ -67,10 +49,8 @@ const MenuItem = ({
       <Ionicons name={icon} size={20} color={color} />
     </View>
     <View style={styles.menuTextContainer}>
-      <Text style={[styles.menuLabel, isDestructive && { color: COLORS.red }]}>
-        {label}
-      </Text>
-      {subtext && <Text style={styles.menuSubtext}>{subtext}</Text>}
+      <Text style={[styles.menuLabel, isDestructive && { color: COLORS.red }]}>{label}</Text>
+      {subtext && <Text style={styles.menuSubtext} numberOfLines={1}>{subtext}</Text>}
     </View>
     {hasSwitch ? (
       <Switch
@@ -79,8 +59,10 @@ const MenuItem = ({
         trackColor={{ false: '#CBD5E1', true: COLORS.primary }}
         thumbColor={'#fff'}
       />
+    ) : badge ? (
+      <View style={styles.badge}><Text style={styles.badgeText}>{badge}</Text></View>
     ) : (
-      <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+      <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
     )}
   </TouchableOpacity>
 );
@@ -89,25 +71,19 @@ export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   
-  // State
   const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState(true);
 
-  // 🔄 Initial Data Load
   useEffect(() => {
     getProfile();
   }, []);
 
-  /**
-   * Fetches user profile data from Supabase.
-   * Handles cases where profile row might not exist yet.
-   */
   const getProfile = async () => {
     try {
+      setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) return; // Handle unauthenticated state if needed
+      if (!user) return;
 
       const { data, error } = await supabase
         .from('profiles')
@@ -115,23 +91,19 @@ export default function ProfileScreen() {
         .eq('id', user.id)
         .single();
 
-      if (error && error.code !== 'PGRST116') throw error;
-
       setProfile({
         ...(data || {}),
         email: user.email,
-        full_name: data?.full_name || 'Foodie User',
-        role: data?.role || 'user',
+        full_name: data?.full_name || 'Student User',
         joined: new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
       });
     } catch (error) {
-      Alert.alert('Error', 'Could not load profile data.');
+      console.log(error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  /**
-   * Handles secure logout logic.
-   */
   const handleLogout = async () => {
     Alert.alert("Log Out", "Are you sure you want to sign out?", [
       { text: "Cancel", style: "cancel" },
@@ -140,336 +112,233 @@ export default function ProfileScreen() {
         style: "destructive",
         onPress: async () => {
           const { error } = await supabase.auth.signOut();
-          if (error) Alert.alert("Error", error.message);
-          else router.replace('/welcome');
+          if (!error) router.replace('/login');
         }
       }
     ]);
   };
 
-  /**
-   * Updates the Chef's kitchen location to current GPS coordinates.
-   */
-  const updateLocation = async () => {
-    setLoading(true);
-    try {
-      const coords = await getCurrentLocation();
-      if (!coords) throw new Error("Could not fetch GPS location.");
-
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          latitude: coords.latitude,
-          longitude: coords.longitude
-        })
-        .eq('id', profile.id);
-
-      if (error) throw error;
-
-      Alert.alert("Success 📍", "Kitchen location updated to your current position!");
-      getProfile(); // Refresh local state to show badge
-
-    } catch (error) {
-      Alert.alert("Location Error", error.message);
-    } finally {
-      setLoading(false);
-    }
+  const getInitials = (name) => {
+    if (!name) return 'U';
+    return name.split(' ').map(n => n[0]).join('').toUpperCase();
   };
 
+  if (loading && !profile) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+      </View>
+    );
+  }
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-
-        {/* 👤 Header Profile */}
-        <View style={styles.profileHeader}>
-          <View style={styles.avatarContainer}>
-            <Text style={styles.avatarText}>
-              {profile?.email?.[0]?.toUpperCase() || 'U'}
-            </Text>
-            {profile?.role === 'chef' && (
-              <View style={styles.chefBadge}>
-                <Text style={styles.chefBadgeEmoji}>👨‍🍳</Text>
-              </View>
-            )}
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+        {/* --- 👤 NEW HERO SECTION --- */}
+        <View style={[styles.heroSection, { paddingTop: insets.top + 20 }]}>
+          <View style={styles.avatarWrapper}>
+            <View style={styles.avatar}>
+               <Text style={styles.avatarText}>{getInitials(profile?.full_name)}</Text>
+            </View>
+            <TouchableOpacity style={styles.editBadge}>
+                <Ionicons name="camera" size={14} color="white" />
+            </TouchableOpacity>
           </View>
+
           <Text style={styles.userName}>{profile?.full_name}</Text>
-          <Text style={styles.userHandle}>{profile?.email}</Text>
-
-          {/* Chef Location Tag */}
-          {profile?.role === 'chef' && profile?.latitude && (
-            <View style={styles.locationTag}>
-              <Ionicons name="location" size={12} color={COLORS.successText} />
-              <Text style={styles.locationText}>Kitchen Location Active</Text>
-            </View>
-          )}
+          <Text style={styles.userEmail}>{profile?.email}</Text>
+          
+          <View style={styles.membershipBadge}>
+             <Ionicons name="ribbon" size={12} color={COLORS.gold} />
+             <Text style={styles.membershipText}>Gold Student Member</Text>
+          </View>
         </View>
 
-        {/* 📊 Quick Stats */}
+        {/* --- 📊 STATS CARD --- */}
         <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{profile?.role === 'chef' ? '24' : '12'}</Text>
-            <Text style={styles.statLabel}>{profile?.role === 'chef' ? 'Orders Received' : 'Orders Placed'}</Text>
-          </View>
-          <View style={styles.vertDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{profile?.joined || "..."}</Text>
-            <Text style={styles.statLabel}>Member Since</Text>
-          </View>
+            <View style={styles.statBox}>
+                <Text style={styles.statValue}>12</Text>
+                <Text style={styles.statLabel}>Orders</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statBox}>
+                <Text style={styles.statValue}>5</Text>
+                <Text style={styles.statLabel}>Favorites</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statBox}>
+                <Text style={styles.statValue}>2.4k</Text>
+                <Text style={styles.statLabel}>T-Points</Text>
+            </View>
         </View>
 
-        {/* 🚨 CHEF ONLY: Kitchen Settings */}
-        {profile?.role === 'chef' && (
-          <View style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>KITCHEN SETTINGS</Text>
-            <View style={styles.sectionCard}>
-              <MenuItem
-                icon="navigate-circle"
-                color={COLORS.orange}
-                bg={COLORS.orangeLight}
-                label={loading ? "Updating GPS..." : "Update Kitchen Location"}
-                subtext="Set current location for delivery calculations"
-                onPress={updateLocation}
-              />
-            </View>
-          </View>
-        )}
-
-        {/* 📦 Standard Account Section */}
-        <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>MY ACCOUNT</Text>
-          <View style={styles.sectionCard}>
+        {/* --- 📦 MAIN MENU --- */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>ACCOUNT SETTINGS</Text>
+          <View style={styles.group}>
             <MenuItem
-              icon="receipt"
+              icon="person-outline"
               color={COLORS.blue}
-              bg={COLORS.blueLight}
+              bg="#E0F2FE"
+              label="Personal Information"
+              subtext="Edit your name and phone"
+            />
+            <View style={styles.divider} />
+            <MenuItem
+              icon="receipt-outline"
+              color={COLORS.primary}
+              bg={COLORS.primaryLight}
               label="Order History"
-              subtext="View past transactions"
               onPress={() => router.push('/(tabs)/orders')}
             />
             <View style={styles.divider} />
             <MenuItem
-              icon="location"
-              color={COLORS.primary}
-              bg={COLORS.primaryLight}
+              icon="location-outline"
+              color={COLORS.green}
+              bg="#DCFCE7"
               label="Saved Addresses"
-              subtext="Manage delivery locations"
+              subtext="Hostel, College, Gym"
             />
           </View>
         </View>
 
-        {/* ⚙️ Preferences */}
-        <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>PREFERENCES</Text>
-          <View style={styles.sectionCard}>
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>PREFERENCES</Text>
+          <View style={styles.group}>
             <MenuItem
-              icon="notifications"
-              color={COLORS.obsidian}
-              bg="#F3F4F6"
-              label="Notifications"
-              hasSwitch={true}
+              icon="notifications-outline"
+              color={COLORS.gold}
+              bg="#FEF3C7"
+              label="Push Notifications"
+              hasSwitch
               switchValue={notifications}
               onSwitchChange={setNotifications}
             />
-          </View>
-        </View>
-
-        {/* ⚠️ Logout Section */}
-        <View style={styles.sectionContainer}>
-          <View style={styles.sectionCard}>
-            <MenuItem
-              icon="log-out"
-              color={COLORS.red}
-              bg={COLORS.redLight}
-              label="Log Out"
-              isDestructive={true}
-              onPress={handleLogout}
+             <View style={styles.divider} />
+             <MenuItem
+              icon="shield-checkmark-outline"
+              color={COLORS.obsidian}
+              bg="#F3F4F6"
+              label="Privacy & Security"
             />
           </View>
         </View>
 
-        <View style={styles.footerContainer}>
-          <Text style={styles.versionText}>TiffinTales v1.0.2 • Made with ❤️</Text>
-        </View>
-
+        {/* --- ⚠️ LOGOUT --- */}
+        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+          <Ionicons name="log-out" size={20} color={COLORS.red} />
+          <Text style={styles.logoutBtnText}>Sign Out of TiffinTales</Text>
+        </TouchableOpacity>
+        
+        <Text style={styles.version}>Version 1.2.0 • Made with ❤️ for Students</Text>
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background
-  },
-  scrollContent: {
-    paddingBottom: 100
-  },
-  // Profile Header
-  profileHeader: {
+  container: { flex: 1, backgroundColor: COLORS.background },
+  
+  // Hero Section
+  heroSection: {
     alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 24
+    backgroundColor: COLORS.surface,
+    paddingBottom: 30,
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.05,
+    shadowRadius: 20,
+    elevation: 5,
   },
-  avatarContainer: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: COLORS.primaryLight,
+  avatarWrapper: {
+    position: 'relative',
+    marginBottom: 16,
+  },
+  avatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
-    borderWidth: 3,
-    borderColor: COLORS.surface,
-    shadowColor: COLORS.primary,
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 5
+    borderWidth: 4,
+    borderColor: COLORS.primaryLight,
   },
-  avatarText: {
-    fontSize: 36,
-    fontWeight: '800',
-    color: COLORS.primary
-  },
-  chefBadge: {
+  avatarText: { fontSize: 36, fontWeight: '800', color: 'white' },
+  editBadge: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    backgroundColor: COLORS.surface,
-    padding: 6,
-    borderRadius: 12,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.1
+    backgroundColor: COLORS.obsidian,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: 'white',
   },
-  chefBadgeEmoji: {
-    fontSize: 12
-  },
-  userName: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: COLORS.text,
-    letterSpacing: -0.5
-  },
-  userHandle: {
-    fontSize: 14,
-    color: COLORS.subtext,
-    marginTop: 2
-  },
-  locationTag: {
+  userName: { fontSize: 24, fontWeight: '800', color: COLORS.obsidian, marginBottom: 4 },
+  userEmail: { fontSize: 14, color: COLORS.subtext, marginBottom: 12 },
+  membershipBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.successBg,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginTop: 12,
+    backgroundColor: '#FFFBEB',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: COLORS.successBorder
+    borderColor: '#FEF3C7',
   },
-  locationText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.successText,
-    marginLeft: 4
-  },
-  // Stats Row
+  membershipText: { fontSize: 11, fontWeight: '700', color: COLORS.gold, marginLeft: 5, textTransform: 'uppercase' },
+
+  // Stats
   statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-evenly',
-    alignItems: 'center',
     backgroundColor: COLORS.surface,
-    marginHorizontal: 20,
-    paddingVertical: 20,
-    borderRadius: 20,
+    marginHorizontal: 25,
+    marginTop: -25,
+    borderRadius: 24,
+    padding: 20,
     shadowColor: '#000',
-    shadowOpacity: 0.03,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.1,
     shadowRadius: 10,
-    elevation: 3,
-    marginBottom: 30,
-    borderWidth: 1,
-    borderColor: COLORS.border
+    elevation: 10,
   },
-  statItem: {
-    alignItems: 'center',
-    width: '40%'
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: COLORS.text
-  },
-  statLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: COLORS.subtext,
-    marginTop: 4,
-    letterSpacing: 0.5
-  },
-  vertDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: COLORS.border
-  },
+  statBox: { flex: 1, alignItems: 'center' },
+  statValue: { fontSize: 18, fontWeight: '800', color: COLORS.obsidian },
+  statLabel: { fontSize: 11, color: COLORS.subtext, fontWeight: '600', marginTop: 2 },
+  statDivider: { width: 1, height: '60%', backgroundColor: COLORS.border, alignSelf: 'center' },
+
   // Sections
-  sectionContainer: {
-    marginBottom: 24,
-    paddingHorizontal: 20
-  },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: COLORS.subtext,
-    marginBottom: 10,
-    marginLeft: 8,
-    letterSpacing: 1
-  },
-  sectionCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    overflow: 'hidden'
-  },
-  // Menu Items
-  menuItem: {
+  section: { marginTop: 30, paddingHorizontal: 20 },
+  sectionLabel: { fontSize: 12, fontWeight: '800', color: COLORS.subtext, marginLeft: 10, marginBottom: 10, letterSpacing: 1 },
+  group: { backgroundColor: COLORS.surface, borderRadius: 24, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border },
+  menuItem: { flexDirection: 'row', alignItems: 'center', padding: 16 },
+  divider: { height: 1, backgroundColor: COLORS.border, marginLeft: 65 },
+  iconBox: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  menuTextContainer: { flex: 1, marginLeft: 15 },
+  menuLabel: { fontSize: 15, fontWeight: '700', color: COLORS.text },
+  menuSubtext: { fontSize: 12, color: COLORS.subtext, marginTop: 2 },
+
+  // Logout
+  logoutBtn: {
+    marginHorizontal: 20,
+    marginTop: 40,
+    backgroundColor: '#FFF1F2',
+    padding: 18,
+    borderRadius: 24,
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 18
-  },
-  iconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
     justifyContent: 'center',
-    alignItems: 'center'
+    borderWidth: 1,
+    borderColor: '#FFE4E6',
   },
-  menuTextContainer: {
-    flex: 1,
-    marginLeft: 16
-  },
-  menuLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.text
-  },
-  menuSubtext: {
-    fontSize: 12,
-    color: COLORS.subtext,
-    marginTop: 2
-  },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.border,
-    marginLeft: 74
-  },
-  footerContainer: {
-    alignItems: 'center',
-    marginTop: 20
-  },
-  versionText: {
-    fontSize: 12,
-    color: COLORS.subtext,
-    opacity: 0.6
-  }
+  logoutBtnText: { color: COLORS.red, fontWeight: '800', fontSize: 16, marginLeft: 10 },
+  version: { textAlign: 'center', marginTop: 20, color: COLORS.subtext, fontSize: 12, fontWeight: '600' }
 });

@@ -6,114 +6,96 @@ import {
   TouchableOpacity,
   RefreshControl,
   StyleSheet,
-  Alert,
   ActivityIndicator,
-  Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import * as Animatable from 'react-native-animatable'; // Ensure you ran the install command!
 
 // Third-party Imports
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 // Local Imports
 import { supabase } from '../../lib/supabase';
 import { useCart } from '../../lib/store';
 import OrderCard from '../../components/OrderCard';
 
-// 🎨 Brand Theme Constants
 const COLORS = {
-  background: '#F8F9FA',
-  obsidian: '#1A0B2E',
-  gold: '#F59E0B',
+  background: '#F1F5F9',
+  obsidian: '#0F172A',
+  primary: '#7E22CE',
+  accent: '#F59E0B',
   white: '#FFFFFF',
   gray: '#64748B',
   red: '#EF4444',
   border: '#E2E8F0',
   success: '#10B981',
-  loadingBg: '#FFEBEB',
 };
 
-/**
- * DashboardHeader Component
- * Displays the kitchen status, logout button, and financial summaries.
- * Extracted for performance optimization.
- */
 const DashboardHeader = ({ stats, onLogout }) => (
-  <View style={styles.headerContainer}>
-    <View style={styles.topBar}>
+  <View style={styles.headerWrapper}>
+    <View style={styles.topRow}>
       <View>
-        <Text style={styles.greeting}>Kitchen Desk</Text>
-        <Text style={styles.subGreeting}>Live status overview</Text>
+        <Text style={styles.welcomeText}>Kitchen Desk</Text>
+        <Text style={styles.statusSubtext}>Live Operations Center</Text>
       </View>
-      <TouchableOpacity onPress={onLogout} style={styles.logoutBtn}>
-        <Ionicons name="power" size={20} color={COLORS.red} />
+      <TouchableOpacity onPress={onLogout} style={styles.powerBtn}>
+        <Ionicons name="power-outline" size={20} color={COLORS.red} />
       </TouchableOpacity>
     </View>
 
-    <View style={styles.statsRow}>
-      <View style={styles.statCardPrimary}>
-        <Text style={styles.statLabelLight}>TODAY'S REVENUE</Text>
-        <Text style={styles.statValueLarge}>₹{stats.earnings}</Text>
-      </View>
-      <View style={styles.statCardSecondary}>
+    <View style={styles.mainStatsContainer}>
+      <LinearGradient
+        colors={[COLORS.obsidian, '#1E293B']}
+        style={styles.primaryStatCard}
+      >
+        <View style={styles.statInfo}>
+          <Text style={styles.statLabelLight}>TODAY'S REVENUE</Text>
+          <Text style={styles.revenueValue}>₹{stats.earnings}</Text>
+        </View>
+        <View style={styles.statIconCircle}>
+          <Ionicons name="wallet-outline" size={24} color="white" />
+        </View>
+      </LinearGradient>
+
+      <View style={styles.secondaryStatCard}>
         <Text style={styles.statLabelDark}>ACTIVE</Text>
-        <Text style={styles.statValueSmall}>{stats.active}</Text>
+        <Text style={styles.activeValue}>{stats.active}</Text>
+        <View style={styles.activeIndicator} />
       </View>
     </View>
 
-    <View style={styles.sectionHeader}>
-      <View style={styles.statusDot} />
-      <Text style={styles.sectionTitle}>LIVE FEED</Text>
+    <View style={styles.feedHeader}>
+      <Animatable.View 
+        animation="pulse" 
+        iterationCount="infinite" 
+        style={styles.liveDot} 
+      />
+      <Text style={styles.feedTitle}>LIVE ORDER STREAM</Text>
     </View>
   </View>
 );
 
-/**
- * ChefDashboard Screen
- * Main control center for chefs to view orders, revenue, and active status.
- * Handles realtime subscriptions to Supabase for incoming orders.
- */
 export default function ChefDashboard() {
-  const { user, signOut } = useCart();
+  const { signOut } = useCart();
   const router = useRouter();
 
-  // State Management
   const [orders, setOrders] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ earnings: 0, active: 0 });
 
-  /**
-   * Fetches orders from Supabase and calculates local dashboard statistics.
-   * Handles user session validation internally.
-   */
   const fetchDashboardData = async () => {
-    let currentUser = user;
-
-    // Fallback: Check Supabase session if store user is missing
-    if (!currentUser) {
-      const { data } = await supabase.auth.getUser();
-      currentUser = data.user;
-    }
-
-    if (!currentUser) {
-      setLoading(false);
-      return;
-    }
-
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
       const { data, error } = await supabase
         .from('orders')
-        .select(`
-          *,
-          order_items (
-            *,
-            menu_items ( name, price )
-          )
-        `)
-        .eq('chef_id', currentUser.id)
+        .select(`*, order_items (*, menu_items ( name, price ))`)
+        .eq('chef_id', user.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -121,89 +103,48 @@ export default function ChefDashboard() {
       const orderList = data || [];
       setOrders(orderList);
 
-      // --- Client-side Stats Calculation ---
       const today = new Date().toISOString().split('T')[0];
-
-      // 1. Calculate Today's Earnings (Completed orders only)
       const todayEarnings = orderList
         .filter(o => o.created_at.startsWith(today) && o.status === 'ready')
         .reduce((sum, o) => sum + parseFloat(o.total_price || 0), 0);
 
-      // 2. Calculate Active Orders (Pending or Cooking)
       const activeOrderCount = orderList
         .filter(o => ['pending', 'cooking'].includes(o.status)).length;
 
       setStats({ earnings: todayEarnings, active: activeOrderCount });
-
     } catch (error) {
-      // In production, log this to a monitoring service (e.g., Sentry)
-      Alert.alert("Error", "Failed to load dashboard data.");
+      console.error(error);
     } finally {
       setLoading(false);
     }
   };
 
-  // Initial Load & Focus Effect
-  useFocusEffect(
-    useCallback(() => {
-      fetchDashboardData();
-    }, [user])
-  );
+  useFocusEffect(useCallback(() => { fetchDashboardData(); }, []));
 
-  /**
-   * Realtime Listener
-   * Subscribes to the 'orders' table for INSERT events specific to this chef.
-   */
   useEffect(() => {
-    if (!user?.id) return;
+    let channel;
+    const connectRealtime = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-    const channel = supabase
-      .channel('chef-dashboard')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'orders',
-          filter: `chef_id=eq.${user.id}`,
-        },
-        () => {
-          Alert.alert("🔔 New Tiffin Order!", "A student just placed an order.");
-          fetchDashboardData(); // Refresh list immediately
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
+      channel = supabase.channel(`chef_dash_${user.id}`)
+        .on('postgres_changes', { 
+            event: 'INSERT', 
+            schema: 'public', 
+            table: 'orders', 
+            filter: `chef_id=eq.${user.id}` 
+        }, () => fetchDashboardData())
+        .subscribe();
     };
-  }, [user]);
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchDashboardData();
-    setRefreshing(false);
-  };
-
-  const handleLogout = () => {
-    Alert.alert("Close Kitchen?", "Log out?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Log Out",
-        style: "destructive",
-        onPress: async () => {
-          await signOut();
-          router.replace('/login');
-        }
-      }
-    ]);
-  };
+    connectRealtime();
+    return () => { if (channel) supabase.removeChannel(channel); };
+  }, []);
 
   if (loading && !refreshing) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={COLORS.obsidian} />
-        <Text style={styles.loadingText}>Connecting to Kitchen...</Text>
+      <View style={styles.loader}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
   }
@@ -211,31 +152,18 @@ export default function ChefDashboard() {
   return (
     <View style={styles.container}>
       <StatusBar style="dark" />
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <FlatList
           data={orders}
           keyExtractor={(item) => item.id.toString()}
-          renderItem={({ item }) => (
-            <OrderCard order={item} onUpdate={fetchDashboardData} />
+          renderItem={({ item, index }) => (
+            <Animatable.View animation="fadeInUp" delay={index * 50}>
+               <OrderCard order={item} onUpdate={fetchDashboardData} />
+            </Animatable.View>
           )}
-          ListHeaderComponent={
-            <DashboardHeader stats={stats} onLogout={handleLogout} />
-          }
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={COLORS.obsidian}
-            />
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Ionicons name="receipt-outline" size={50} color={COLORS.border} />
-              <Text style={styles.emptyText}>No active orders</Text>
-            </View>
-          }
+          ListHeaderComponent={<DashboardHeader stats={stats} onLogout={signOut} />}
+          contentContainerStyle={{ paddingBottom: 40 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchDashboardData} />}
         />
       </SafeAreaView>
     </View>
@@ -243,128 +171,24 @@ export default function ChefDashboard() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    textAlign: 'center',
-    marginTop: 10,
-    color: COLORS.gray,
-  },
-  listContent: {
-    paddingBottom: 100,
-  },
-  // Header Styles
-  headerContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-  },
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  greeting: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: COLORS.obsidian,
-  },
-  subGreeting: {
-    fontSize: 13,
-    color: COLORS.gray,
-    fontWeight: '500',
-  },
-  logoutBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: COLORS.loadingBg,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  // Stats Cards
-  statsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 24,
-  },
-  statCardPrimary: {
-    flex: 2,
-    backgroundColor: COLORS.obsidian,
-    padding: 18,
-    borderRadius: 18,
-    justifyContent: 'center',
-  },
-  statCardSecondary: {
-    flex: 1,
-    backgroundColor: COLORS.white,
-    padding: 18,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    justifyContent: 'center',
-  },
-  statLabelLight: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.6)',
-    letterSpacing: 0.5,
-  },
-  statLabelDark: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.gray,
-    letterSpacing: 0.5,
-  },
-  statValueLarge: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: 'white',
-    marginTop: 4,
-  },
-  statValueSmall: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: COLORS.obsidian,
-    marginTop: 4,
-  },
-  // Section Headers
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    paddingLeft: 4,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: COLORS.success,
-    marginRight: 6,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: COLORS.gray,
-    letterSpacing: 1,
-  },
-  // Empty State
-  emptyContainer: {
-    alignItems: 'center',
-    marginTop: 60,
-    opacity: 0.8,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.gray,
-    marginTop: 10,
-  },
+  container: { flex: 1, backgroundColor: COLORS.background },
+  loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  headerWrapper: { padding: 20 },
+  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  welcomeText: { fontSize: 24, fontWeight: '900', color: COLORS.obsidian },
+  statusSubtext: { fontSize: 13, color: COLORS.gray, fontWeight: '600' },
+  powerBtn: { width: 44, height: 44, borderRadius: 14, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center', elevation: 2 },
+  mainStatsContainer: { flexDirection: 'row', gap: 12, marginBottom: 25 },
+  primaryStatCard: { flex: 1.8, borderRadius: 24, padding: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  secondaryStatCard: { flex: 1, backgroundColor: 'white', borderRadius: 24, padding: 20, justifyContent: 'center', borderWidth: 1, borderColor: COLORS.border },
+  statInfo: { flex: 1 },
+  statLabelLight: { fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.5)', letterSpacing: 1 },
+  statLabelDark: { fontSize: 10, fontWeight: '800', color: COLORS.gray, letterSpacing: 1 },
+  revenueValue: { fontSize: 24, fontWeight: '900', color: 'white', marginTop: 4 },
+  activeValue: { fontSize: 24, fontWeight: '900', color: COLORS.obsidian, marginTop: 4 },
+  statIconCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' },
+  activeIndicator: { position: 'absolute', top: 15, right: 15, width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.accent },
+  feedHeader: { flexDirection: 'row', alignItems: 'center', paddingLeft: 5 },
+  liveDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.success, marginRight: 8 },
+  feedTitle: { fontSize: 11, fontWeight: '900', color: COLORS.gray, letterSpacing: 1.5 },
 });
