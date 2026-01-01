@@ -8,21 +8,16 @@ import {
   Alert,
   Switch,
   StatusBar,
-  ActivityIndicator,
   Dimensions
 } from 'react-native';
 
-// Third-party Imports
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 
-// Local Imports
 import { supabase } from '../../lib/supabase';
 import { getCurrentLocation } from '../../lib/location';
-
-const { width } = Dimensions.get('window');
 
 const COLORS = {
   background: '#F8FAFC',
@@ -37,6 +32,17 @@ const COLORS = {
   gold: '#F59E0B',
   blue: '#3B82F6',
   green: '#10B981',
+  switchTrackFalse: '#CBD5E1',
+  switchThumb: '#FFFFFF',
+  chefBadgeBg: '#FFFBEB',
+  chefBadgeBorder: '#FEF3C7',
+  userBadgeBg: '#F5F3FF',
+  userBadgeBorder: '#E9D5FF',
+  logoutBg: '#FFF1F2',
+  logoutBorder: '#FFE4E6',
+  shadow: '#000000',
+  menuItemBg1: '#FFFBEB',
+  menuItemBg2: '#EFF6FF',
 };
 
 const MenuItem = ({ icon, color, bg, label, subtext, onPress, hasSwitch, isDestructive, switchValue, onSwitchChange }) => (
@@ -57,11 +63,11 @@ const MenuItem = ({ icon, color, bg, label, subtext, onPress, hasSwitch, isDestr
       <Switch
         value={switchValue}
         onValueChange={onSwitchChange}
-        trackColor={{ false: '#CBD5E1', true: COLORS.primary }}
-        thumbColor={'#fff'}
+        trackColor={{ false: COLORS.switchTrackFalse, true: COLORS.primary }}
+        thumbColor={COLORS.switchThumb}
       />
     ) : (
-      <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+      <Ionicons name="chevron-forward" size={16} color={COLORS.subtext} />
     )}
   </TouchableOpacity>
 );
@@ -127,9 +133,9 @@ export default function ProfileScreen() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         
-        {/* --- 👤 NEW HERO HEADER --- */}
+        {/* --- HERO HEADER --- */}
         <LinearGradient 
           colors={[COLORS.surface, COLORS.background]} 
           style={[styles.hero, { paddingTop: insets.top + 20 }]}
@@ -139,7 +145,7 @@ export default function ProfileScreen() {
                <Text style={styles.avatarText}>{profile?.full_name?.[0]?.toUpperCase()}</Text>
             </View>
             <TouchableOpacity style={styles.editBadge}>
-                <Ionicons name="camera" size={14} color="white" />
+                <Ionicons name="camera" size={14} color={COLORS.surface} />
             </TouchableOpacity>
           </View>
 
@@ -158,7 +164,7 @@ export default function ProfileScreen() {
           </View>
         </LinearGradient>
 
-        {/* --- 📊 DASHBOARD STATS --- */}
+        {/* --- DASHBOARD STATS --- */}
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
              <Text style={styles.statValue}>{profile?.role === 'chef' ? '24' : '12'}</Text>
@@ -171,7 +177,7 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* --- 📦 KITCHEN/ACCOUNT SECTION --- */}
+        {/* --- KITCHEN/ACCOUNT SECTION --- */}
         {profile?.role === 'chef' && (
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>KITCHEN LOGISTICS</Text>
@@ -179,7 +185,7 @@ export default function ProfileScreen() {
               <MenuItem
                 icon="navigate-circle"
                 color={COLORS.gold}
-                bg="#FFFBEB"
+                bg={COLORS.menuItemBg1}
                 label={loading ? "Syncing GPS..." : "Update Kitchen Location"}
                 subtext={profile?.latitude ? "Location verified ✅" : "Set your GPS coordinates"}
                 onPress={updateLocation}
@@ -194,7 +200,7 @@ export default function ProfileScreen() {
             <MenuItem
               icon="receipt"
               color={COLORS.blue}
-              bg="#EFF6FF"
+              bg={COLORS.menuItemBg2}
               label="Order History"
               onPress={() => router.push('/(tabs)/orders')}
             />
@@ -211,7 +217,7 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* --- ⚠️ LOGOUT --- */}
+        {/* --- LOGOUT --- */}
         <View style={styles.section}>
            <TouchableOpacity 
               style={styles.logoutBtn} 
@@ -228,35 +234,184 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  hero: { alignItems: 'center', paddingBottom: 30, borderBottomLeftRadius: 32, borderBottomRightRadius: 32 },
-  avatarWrapper: { position: 'relative', marginBottom: 15 },
-  avatar: { width: 96, height: 96, borderRadius: 48, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', elevation: 10, shadowColor: COLORS.primary, shadowOpacity: 0.3, shadowRadius: 10 },
-  avatarText: { fontSize: 34, fontWeight: '800', color: 'white' },
-  editBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: COLORS.obsidian, width: 30, height: 30, borderRadius: 15, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: 'white' },
-  userName: { fontSize: 24, fontWeight: '800', color: COLORS.obsidian, marginBottom: 4 },
-  userEmail: { fontSize: 14, color: COLORS.subtext, marginBottom: 15 },
-  roleBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-  chefTheme: { backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FEF3C7' },
-  userTheme: { backgroundColor: COLORS.primaryLight, borderWidth: 1, borderColor: '#E9D5FF' },
-  roleText: { fontSize: 11, fontWeight: '700', marginLeft: 6, textTransform: 'uppercase' },
-
-  statsRow: { flexDirection: 'row', backgroundColor: 'white', marginHorizontal: 25, marginTop: -25, borderRadius: 24, paddingVertical: 20, elevation: 5, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10 },
-  statBox: { flex: 1, alignItems: 'center' },
-  statValue: { fontSize: 18, fontWeight: '800', color: COLORS.text },
-  statLabel: { fontSize: 11, color: COLORS.subtext, fontWeight: '600', marginTop: 2 },
-  statDivider: { width: 1, height: '60%', backgroundColor: COLORS.border, alignSelf: 'center' },
-
-  section: { marginTop: 30, paddingHorizontal: 20 },
-  sectionLabel: { fontSize: 11, fontWeight: '800', color: COLORS.subtext, marginLeft: 10, marginBottom: 10, letterSpacing: 1.2 },
-  menuGroup: { backgroundColor: 'white', borderRadius: 24, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border },
-  menuItem: { flexDirection: 'row', alignItems: 'center', padding: 16 },
-  menuTextContainer: { flex: 1, marginLeft: 15 },
-  menuLabel: { fontSize: 15, fontWeight: '700', color: COLORS.text },
-  menuSubtext: { fontSize: 12, color: COLORS.subtext, marginTop: 2 },
-  iconBox: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  divider: { height: 1, backgroundColor: COLORS.border, marginLeft: 70 },
-
-  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF1F2', padding: 18, borderRadius: 24, borderWidth: 1, borderColor: '#FFE4E6' },
-  logoutBtnText: { color: COLORS.red, fontWeight: '800', fontSize: 16, marginLeft: 10 }
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  scrollContent: {
+    paddingBottom: 100,
+  },
+  hero: {
+    alignItems: 'center',
+    paddingBottom: 30,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+  },
+  avatarWrapper: {
+    position: 'relative',
+    marginBottom: 15,
+  },
+  avatar: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 10,
+    shadowColor: COLORS.primary,
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+  },
+  avatarText: {
+    fontSize: 34,
+    fontWeight: '800',
+    color: COLORS.surface,
+  },
+  editBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: COLORS.obsidian,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: COLORS.surface,
+  },
+  userName: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: COLORS.obsidian,
+    marginBottom: 4,
+  },
+  userEmail: {
+    fontSize: 14,
+    color: COLORS.subtext,
+    marginBottom: 15,
+  },
+  roleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  chefTheme: {
+    backgroundColor: COLORS.chefBadgeBg,
+    borderWidth: 1,
+    borderColor: COLORS.chefBadgeBorder,
+  },
+  userTheme: {
+    backgroundColor: COLORS.userBadgeBg,
+    borderWidth: 1,
+    borderColor: COLORS.userBadgeBorder,
+  },
+  roleText: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginLeft: 6,
+    textTransform: 'uppercase',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.surface,
+    marginHorizontal: 25,
+    marginTop: -25,
+    borderRadius: 24,
+    paddingVertical: 20,
+    elevation: 5,
+    shadowColor: COLORS.shadow,
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+  },
+  statBox: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: COLORS.subtext,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  statDivider: {
+    width: 1,
+    height: '60%',
+    backgroundColor: COLORS.border,
+    alignSelf: 'center',
+  },
+  section: {
+    marginTop: 30,
+    paddingHorizontal: 20,
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.subtext,
+    marginLeft: 10,
+    marginBottom: 10,
+    letterSpacing: 1.2,
+  },
+  menuGroup: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 24,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  menuTextContainer: {
+    flex: 1,
+    marginLeft: 15,
+  },
+  menuLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  menuSubtext: {
+    fontSize: 12,
+    color: COLORS.subtext,
+    marginTop: 2,
+  },
+  iconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginLeft: 70,
+  },
+  logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.logoutBg,
+    padding: 18,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: COLORS.logoutBorder,
+  },
+  logoutBtnText: {
+    color: COLORS.red,
+    fontWeight: '800',
+    fontSize: 16,
+    marginLeft: 10,
+  },
 });

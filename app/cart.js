@@ -9,9 +9,6 @@ import {
   Alert,
   ActivityIndicator,
   StatusBar,
-  Dimensions,
-  Platform,
-  Image
 } from 'react-native';
 
 // Third-party Imports
@@ -24,20 +21,25 @@ import { useCart } from '../lib/store';
 import { supabase } from '../lib/supabase';
 import PaymentModal from '../components/PaymentModal';
 
-const { width } = Dimensions.get('window');
-
 // 🎨 Zomato/Swiggy Style Palette with Obsidian Branding
 const COLORS = {
-  bg: '#F4F6FB',        // Light gray background for contrast
+  bg: '#F4F6FB',
   white: '#FFFFFF',
-  obsidian: '#0F172A',  // Your Brand Primary
-  text: '#1C1C1C',      // Dark Charcoal
-  gray: '#696969',      // Subtitle Gray
+  obsidian: '#0F172A',
+  text: '#1C1C1C',
+  gray: '#696969',
   lightGray: '#E8E8E8',
   border: '#F0F0F0',
-  green: '#257E3E',     // Veg Green
-  red: '#D1353F',       // Non-Veg Red
-  blue: '#2563EB',      // Link Blue
+  green: '#257E3E',
+  red: '#D1353F',
+  blue: '#2563EB',
+  
+  // UI Specific Colors
+  stepBg: '#FAFAFA',
+  inputBg: '#F9F9F9',
+  policyBg: '#F0F3F8',
+  policyBorder: '#E5E9F0',
+  shadow: '#000000',
 };
 
 /**
@@ -49,11 +51,31 @@ const VegIcon = ({ isVeg }) => (
   </View>
 );
 
+/**
+ * Sub-Component for Bill Rows
+ */
+const BillRow = ({ label, value, info }) => (
+  <View style={styles.billRow}>
+    <View style={styles.billLabelContainer}>
+      <Text style={styles.billLabel}>{label}</Text>
+      {info && (
+        <Ionicons 
+          name="information-circle-outline" 
+          size={12} 
+          color={COLORS.gray} 
+          style={styles.infoIcon} 
+        />
+      )}
+    </View>
+    <Text style={styles.billValue}>₹{value}</Text>
+  </View>
+);
+
 export default function CartScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   
-  // Store
+  // Store Hooks
   const { cart, addToCart, removeFromCart, clearCart, getCartTotal, getDeliveryFee } = useCart();
   
   // Local State
@@ -69,6 +91,7 @@ export default function CartScreen() {
   const grandTotal = itemTotal + deliveryFee + platformFee + gst;
 
   // --- ACTIONS ---
+
   const initiateCheckout = async () => {
     if (cart.length === 0) return;
     const { data: { user } } = await supabase.auth.getUser();
@@ -245,11 +268,11 @@ export default function CartScreen() {
           disabled={loading}
         >
           {loading ? (
-            <ActivityIndicator color="white" />
+            <ActivityIndicator color={COLORS.white} />
           ) : (
             <View style={styles.payBtnContent}>
               <Text style={styles.payBtnText}>Place Order</Text>
-              <Ionicons name="caret-forward" size={16} color="white" />
+              <Ionicons name="caret-forward" size={16} color={COLORS.white} />
             </View>
           )}
         </TouchableOpacity>
@@ -266,19 +289,11 @@ export default function CartScreen() {
   );
 }
 
-// Sub-Component for Bill Rows
-const BillRow = ({ label, value, info }) => (
-  <View style={styles.billRow}>
-    <View style={{flexDirection: 'row', alignItems: 'center'}}>
-      <Text style={styles.billLabel}>{label}</Text>
-      {info && <Ionicons name="information-circle-outline" size={12} color={COLORS.gray} style={{marginLeft: 4}} />}
-    </View>
-    <Text style={styles.billValue}>₹{value}</Text>
-  </View>
-);
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+  },
   
   // Header
   header: {
@@ -290,12 +305,25 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
-  backButton: { padding: 4 },
-  headerTitleContainer: { marginLeft: 12 },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
-  headerSubtitle: { fontSize: 12, color: COLORS.gray },
+  backButton: {
+    padding: 4,
+  },
+  headerTitleContainer: {
+    marginLeft: 12,
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: COLORS.gray,
+  },
 
-  scrollContent: { paddingBottom: 100 },
+  scrollContent: {
+    paddingBottom: 100,
+  },
 
   // Cards
   card: {
@@ -304,8 +332,9 @@ const styles = StyleSheet.create({
     marginTop: 12,
     borderRadius: 12,
     padding: 16,
+    
     // Gentle Shadow
-    shadowColor: '#000',
+    shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
@@ -313,15 +342,48 @@ const styles = StyleSheet.create({
   },
 
   // Item Row
-  itemRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-  itemInfo: { flexDirection: 'row', alignItems: 'flex-start', flex: 1 },
-  textContainer: { marginLeft: 10 },
-  itemName: { fontSize: 14, fontWeight: '500', color: COLORS.text, width: 120 },
-  itemPrice: { fontSize: 13, fontWeight: '600', color: COLORS.text, marginTop: 2 },
+  itemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  itemInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    flex: 1,
+  },
+  textContainer: {
+    marginLeft: 10,
+  },
+  itemName: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.text,
+    width: 120,
+  },
+  itemPrice: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginTop: 2,
+  },
   
   // Veg Icon
-  vegBox: { width: 14, height: 14, borderWidth: 1, borderRadius: 3, alignItems: 'center', justifyContent: 'center', marginTop: 3 },
-  vegDot: { width: 8, height: 8, borderRadius: 4 },
+  vegBox: {
+    width: 14,
+    height: 14,
+    borderWidth: 1,
+    borderRadius: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 3,
+  },
+  vegDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
 
   // Stepper
   stepperContainer: {
@@ -330,51 +392,132 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.lightGray,
     borderRadius: 6,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: COLORS.stepBg,
     height: 30,
   },
-  stepBtn: { width: 28, alignItems: 'center', justifyContent: 'center', height: '100%' },
-  stepText: { fontSize: 13, fontWeight: '700', color: COLORS.green, width: 20, textAlign: 'center' },
+  stepBtn: {
+    width: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
+  },
+  stepText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.green,
+    width: 20,
+    textAlign: 'center',
+  },
   
-  rowTotal: { fontSize: 13, fontWeight: '600', color: COLORS.text, width: 50, textAlign: 'right' },
+  rowTotal: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text,
+    width: 50,
+    textAlign: 'right',
+  },
 
-  addMoreBtn: { flexDirection: 'row', alignItems: 'center', paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.border },
-  addMoreText: { marginLeft: 8, fontSize: 13, color: COLORS.text },
+  addMoreBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  addMoreText: {
+    marginLeft: 8,
+    fontSize: 13,
+    color: COLORS.text,
+  },
 
   // Instructions
-  instructionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-  cardTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text, marginLeft: 6 },
+  instructionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginLeft: 6,
+  },
   input: {
-    backgroundColor: '#F9F9F9',
+    backgroundColor: COLORS.inputBg,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: COLORS.lightGray,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 13,
-    color: COLORS.text
+    color: COLORS.text,
   },
 
   // Bill
-  billRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  billLabel: { fontSize: 13, color: COLORS.gray },
-  billValue: { fontSize: 13, color: COLORS.text },
+  billRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  billLabelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  billLabel: {
+    fontSize: 13,
+    color: COLORS.gray,
+  },
+  infoIcon: {
+    marginLeft: 4,
+  },
+  billValue: {
+    fontSize: 13,
+    color: COLORS.text,
+  },
   dashedDivider: {
     height: 1,
     borderWidth: 1,
     borderColor: COLORS.lightGray,
     borderStyle: 'dashed',
     marginVertical: 12,
-    borderRadius: 1
+    borderRadius: 1,
   },
-  grandTotalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  grandTotalLabel: { fontSize: 16, fontWeight: '700', color: COLORS.text },
-  grandTotalValue: { fontSize: 16, fontWeight: '800', color: COLORS.text },
+  grandTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  grandTotalLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  grandTotalValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
 
   // Policy
-  policyContainer: { margin: 16, padding: 12, backgroundColor: '#F0F3F8', borderRadius: 8, borderWidth: 1, borderColor: '#E5E9F0' },
-  policyTitle: { fontSize: 12, fontWeight: '700', color: COLORS.gray, marginBottom: 4 },
-  policyText: { fontSize: 11, color: COLORS.gray, lineHeight: 16 },
+  policyContainer: {
+    margin: 16,
+    padding: 12,
+    backgroundColor: COLORS.policyBg,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.policyBorder,
+  },
+  policyTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.gray,
+    marginBottom: 4,
+  },
+  policyText: {
+    fontSize: 11,
+    color: COLORS.gray,
+    lineHeight: 16,
+  },
 
   // Footer
   footer: {
@@ -390,18 +533,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
+    
+    // Shadow
     elevation: 20,
-    shadowColor: '#000',
+    shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
-  footerLeft: { flexDirection: 'column' },
-  footerTotal: { fontSize: 18, fontWeight: '800', color: COLORS.text },
-  viewBillText: { fontSize: 11, fontWeight: '700', color: COLORS.green, marginTop: 2 },
+  footerLeft: {
+    flexDirection: 'column',
+  },
+  footerTotal: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  viewBillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.green,
+    marginTop: 2,
+  },
   
   payButton: {
-    backgroundColor: COLORS.obsidian, // ✅ Premium Obsidian CTA
+    backgroundColor: COLORS.obsidian,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
@@ -409,14 +565,56 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: '50%',
   },
-  payBtnContent: { flexDirection: 'row', alignItems: 'center' },
-  payBtnText: { color: COLORS.white, fontSize: 15, fontWeight: '700', marginRight: 6 },
+  payBtnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  payBtnText: {
+    color: COLORS.white,
+    fontSize: 15,
+    fontWeight: '700',
+    marginRight: 6,
+  },
 
   // Empty State
-  emptyContainer: { flex: 1, backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  emptyIconCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: COLORS.bg, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text, marginBottom: 8 },
-  emptySubtitle: { fontSize: 14, color: COLORS.gray, textAlign: 'center', marginBottom: 24 },
-  browseBtn: { borderWidth: 1, borderColor: COLORS.obsidian, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 8 },
-  browseBtnText: { color: COLORS.obsidian, fontWeight: '800', fontSize: 13 },
+  emptyContainer: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: COLORS.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: COLORS.gray,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  browseBtn: {
+    borderWidth: 1,
+    borderColor: COLORS.obsidian,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  browseBtnText: {
+    color: COLORS.obsidian,
+    fontWeight: '800',
+    fontSize: 13,
+  },
 });

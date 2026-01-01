@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,6 @@ import {
   Image
 } from 'react-native';
 
-// Third-party Imports
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,20 +27,32 @@ const COLORS = {
   secondaryLight: '#FFEDD5',
   gray: '#6B7280',
   border: '#E5E7EB',
+  white: '#FFFFFF',
+  
+  // Benefits Colors
+  authentic: '#EF4444',
+  fast: '#F59E0B',
+  hygienic: '#10B981',
+  topRated: '#3B82F6',
+  
+  // Shadows & Overlays
+  shadow: '#000000',
+  arrowInactiveBg: 'rgba(255,255,255,0.6)',
+  circle1: '#F3E8FF',
+  circle2: '#FFEDD5',
 };
 
 const SPACING = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 40 };
 
 const BENEFITS_DATA = [
-  { icon: 'heart', label: 'Authentic', color: '#EF4444' },
-  { icon: 'flash', label: 'Fast', color: '#F59E0B' },
-  { icon: 'shield-checkmark', label: 'Hygienic', color: '#10B981' },
-  { icon: 'star', label: 'Top Rated', color: '#3B82F6' },
+  { icon: 'heart', label: 'Authentic', color: COLORS.authentic },
+  { icon: 'flash', label: 'Fast', color: COLORS.fast },
+  { icon: 'shield-checkmark', label: 'Hygienic', color: COLORS.hygienic },
+  { icon: 'star', label: 'Top Rated', color: COLORS.topRated },
 ];
 
 /**
  * RoleCard Component
- * Displays a selectable role card (Eat vs. Cook).
  */
 const RoleCard = ({
   title,
@@ -51,48 +62,69 @@ const RoleCard = ({
   borderColor,
   textColor,
   onPress,
+  isActive,
   features = [],
-  animStyle
-}) => (
-  <Animated.View style={animStyle}>
-    <TouchableOpacity
-      activeOpacity={0.9}
-      onPress={onPress}
-      style={[styles.roleCard, { backgroundColor, borderColor }]}
-    >
-      <View style={styles.iconSection}>
-        <View style={[styles.iconCircle, { backgroundColor: '#FFFFFF' }]}>
-          <Ionicons name={icon} size={32} color={textColor} />
+  entranceStyle
+}) => {
+  const pressAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(pressAnim, { toValue: 0.95, useNativeDriver: true, friction: 5 }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(pressAnim, { toValue: 1, useNativeDriver: true, friction: 5 }).start();
+  };
+
+  return (
+    <Animated.View style={[entranceStyle, { transform: [{ scale: pressAnim }] }]}> 
+      <TouchableOpacity
+        activeOpacity={1}
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        style={[
+          styles.roleCard,
+          { backgroundColor, borderColor },
+          isActive && { borderWidth: 2.5, borderColor: textColor, backgroundColor: backgroundColor }
+        ]}
+      >
+        <View style={styles.iconSection}>
+          <View style={[styles.iconCircle, { backgroundColor: COLORS.white }]}>
+            <Ionicons name={icon} size={32} color={textColor} />
+          </View>
         </View>
-      </View>
 
-      <View style={styles.textSection}>
-        <Text style={[styles.roleTitle, { color: COLORS.obsidian }]}>{title}</Text>
-        <Text style={[styles.roleSubtitle, { color: COLORS.gray }]}>{subtitle}</Text>
+        <View style={styles.textSection}>
+          <Text style={[styles.roleTitle, { color: COLORS.obsidian }]}>{title}</Text>
+          <Text style={[styles.roleSubtitle, { color: COLORS.gray }]}>{subtitle}</Text>
 
-        <View style={styles.featuresList}>
-          {features.map((feature, idx) => (
-            <View key={idx} style={styles.featureRow}>
-              <Ionicons name="checkmark-circle" size={14} color={textColor} />
-              <Text style={styles.featureText}>{feature}</Text>
-            </View>
-          ))}
+          <View style={styles.featuresList}>
+            {features.map((feature, idx) => (
+              <View key={idx} style={styles.featureRow}>
+                <Ionicons name="checkmark-circle" size={14} color={textColor} />
+                <Text style={styles.featureText}>{feature}</Text>
+              </View>
+            ))}
+          </View>
         </View>
-      </View>
 
-      <View style={styles.arrowSection}>
-        <View style={[styles.arrowCircle, { backgroundColor: 'rgba(255,255,255,0.6)' }]}>
-          <Ionicons name="arrow-forward" size={18} color={textColor} />
+        <View style={styles.arrowSection}>
+          {isActive ? (
+             <View style={[styles.arrowCircle, { backgroundColor: textColor }]}>
+                <Ionicons name="checkmark" size={18} color={COLORS.white} />
+             </View>
+          ) : (
+             <View style={[styles.arrowCircle, { backgroundColor: COLORS.arrowInactiveBg }]}>
+                <Ionicons name="arrow-forward" size={18} color={textColor} />
+             </View>
+          )}
         </View>
-      </View>
-    </TouchableOpacity>
-  </Animated.View>
-);
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
 
-/**
- * BenefitCard Component
- * Displays a single benefit grid item.
- */
 const BenefitCard = ({ icon, label, color }) => (
   <View style={styles.benefitCard}>
     <View style={[styles.benefitIcon, { backgroundColor: color + '15' }]}>
@@ -105,8 +137,9 @@ const BenefitCard = ({ icon, label, color }) => (
 export default function WelcomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  
+  const [selectedRole, setSelectedRole] = useState(null); 
 
-  // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
@@ -119,18 +152,19 @@ export default function WelcomeScreen() {
         Animated.spring(slideAnim, { toValue: 0, friction: 8, tension: 40, useNativeDriver: true }),
         Animated.spring(scaleAnim, { toValue: 1, friction: 8, tension: 40, useNativeDriver: true }),
       ]),
-      // Gentle Sway Animation Loop
       Animated.loop(
         Animated.timing(rotateAnim, { toValue: 1, duration: 4000, useNativeDriver: true })
       ),
     ]).start();
   }, []);
 
-  const handleLogin = () => {
-    router.push('/login');
+  const handleRoleSelect = (role) => {
+    setSelectedRole(role);
+    setTimeout(() => {
+      router.push('/login');
+    }, 150); 
   };
 
-  // Interpolations
   const logoRotation = rotateAnim.interpolate({
     inputRange: [0, 0.5, 1],
     outputRange: ['-3deg', '3deg', '-3deg']
@@ -143,7 +177,10 @@ export default function WelcomeScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false} 
+        contentContainerStyle={styles.scrollContent}
+      >
 
         {/* ════ HERO SECTION ════ */}
         <Animated.View style={[styles.heroSection, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
@@ -152,7 +189,6 @@ export default function WelcomeScreen() {
             <View style={[styles.gradientCircle, styles.circle2]} />
           </View>
 
-          {/* LOGO CONTAINER */}
           <View style={styles.logoContainer}>
             <Animated.Image
               source={require('../assets/loginlogo.png')}
@@ -188,8 +224,9 @@ export default function WelcomeScreen() {
               borderColor={COLORS.primary}
               textColor={COLORS.primary}
               features={['Fresh home-cooked meals', 'Affordable & nearby', 'Real-time tracking']}
-              onPress={handleLogin}
-              animStyle={animatedCardStyle}
+              isActive={selectedRole === 'eat'}
+              onPress={() => handleRoleSelect('eat')}
+              entranceStyle={animatedCardStyle}
             />
             <RoleCard
               title="I want to Cook"
@@ -199,8 +236,9 @@ export default function WelcomeScreen() {
               borderColor={COLORS.secondary}
               textColor={COLORS.secondary}
               features={['Sell your recipes', 'Flexible schedule', 'Zero commission start']}
-              onPress={handleLogin}
-              animStyle={animatedCardStyle}
+              isActive={selectedRole === 'cook'}
+              onPress={() => handleRoleSelect('cook')}
+              entranceStyle={animatedCardStyle}
             />
           </View>
 
@@ -220,19 +258,19 @@ export default function WelcomeScreen() {
           </View>
 
         </Animated.View>
-      </ScrollView>
 
-      {/* ════ FOOTER ════ */}
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 10 }]}>
-        <View style={styles.footerDivider} />
-        <View style={styles.footerContent}>
-          <Text style={styles.footerText}>Already have an account? </Text>
-          <TouchableOpacity onPress={() => router.push('/login')}>
-            <Text style={styles.footerLink}>Sign In</Text>
-          </TouchableOpacity>
+        {/* ════ FOOTER ════ */}
+        <View style={styles.footer}>
+          <View style={styles.footerDivider} />
+          <View style={styles.footerContent}>
+            <Text style={styles.footerText}>Already have an account? </Text>
+            <TouchableOpacity onPress={() => router.push('/login')}>
+              <Text style={styles.footerLink}>Sign In</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
 
+      </ScrollView>
     </View>
   );
 }
@@ -254,9 +292,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
     position: 'relative',
   },
-  heroBackground: {
-    ...StyleSheet.absoluteFillObject
-  },
+  heroBackground: { ...StyleSheet.absoluteFillObject },
   gradientCircle: {
     position: 'absolute',
     borderRadius: 999,
@@ -265,14 +301,14 @@ const styles = StyleSheet.create({
   circle1: {
     width: 220,
     height: 220,
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: COLORS.circle1,
     top: -40,
     right: -40
   },
   circle2: {
     width: 160,
     height: 160,
-    backgroundColor: COLORS.secondaryLight,
+    backgroundColor: COLORS.circle2,
     bottom: 20,
     left: -40
   },
@@ -291,11 +327,7 @@ const styles = StyleSheet.create({
     shadowOffset: { height: 10, width: 0 },
     elevation: 10,
   },
-  logoImage: {
-    width: 120,
-    height: 120,
-    borderRadius: 25
-  },
+  logoImage: { width: 120, height: 120, borderRadius: 25 },
   badge: {
     position: 'absolute',
     bottom: 10,
@@ -305,7 +337,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: COLORS.border,
-    shadowColor: '#000',
+    shadowColor: COLORS.shadow,
     shadowOpacity: 0.05,
     shadowRadius: 5,
     elevation: 2
@@ -348,14 +380,12 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 20,
     borderWidth: 1.5,
-    shadowColor: '#000',
+    shadowColor: COLORS.shadow,
     shadowOpacity: 0.03,
     shadowRadius: 10,
     elevation: 2,
   },
-  iconSection: {
-    marginRight: SPACING.md
-  },
+  iconSection: { marginRight: SPACING.md },
   iconCircle: {
     width: 56,
     height: 56,
@@ -363,9 +393,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center'
   },
-  textSection: {
-    flex: 1
-  },
+  textSection: { flex: 1 },
   roleTitle: {
     fontSize: 17,
     fontWeight: '800',
@@ -390,9 +418,7 @@ const styles = StyleSheet.create({
     color: COLORS.gray,
     fontWeight: '500'
   },
-  arrowSection: {
-    marginLeft: SPACING.sm
-  },
+  arrowSection: { marginLeft: SPACING.sm },
   arrowCircle: {
     width: 36,
     height: 36,
@@ -401,9 +427,7 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   // BENEFITS
-  benefitsSection: {
-    marginBottom: SPACING.xl
-  },
+  benefitsSection: { marginBottom: SPACING.xl },
   benefitsTitle: {
     fontSize: 14,
     fontWeight: '700',
@@ -427,7 +451,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: COLORS.border,
-    shadowColor: '#000',
+    shadowColor: COLORS.shadow,
     shadowOpacity: 0.02,
     shadowRadius: 5,
     elevation: 1
@@ -447,8 +471,9 @@ const styles = StyleSheet.create({
   },
   // FOOTER
   footer: {
+    marginTop: 'auto',
     paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.sm
+    paddingTop: SPACING.xl,
   },
   footerDivider: {
     height: 1,

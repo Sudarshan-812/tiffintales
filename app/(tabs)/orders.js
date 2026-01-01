@@ -11,16 +11,13 @@ import {
   StatusBar,
 } from 'react-native';
 
-// Third-party Imports
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import LottieView from 'lottie-react-native'; 
+import LottieView from 'lottie-react-native';
 
-// Local Imports
 import { supabase } from '../../lib/supabase';
 
-// 🎨 Clean Premium Theme
 const COLORS = {
   background: '#F9FAFB',
   surface: '#FFFFFF',
@@ -30,6 +27,19 @@ const COLORS = {
   text: '#1F293B',
   subtext: '#64748B',
   border: '#E2E8F0',
+  white: '#FFFFFF',
+  
+  // Status Colors
+  pending: '#B45309',
+  cooking: '#1D4ED8',
+  ready: '#047857',
+  delivered: '#111827',
+  rejected: '#EF4444',
+  
+  // UI Specific
+  cardHeaderBg: '#FAFAFA',
+  cardHeaderBorder: '#F3F4F6',
+  progressBarBg: '#E5E7EB',
 };
 
 /**
@@ -42,21 +52,21 @@ const OrderStatus = ({ status }) => {
 
   switch (status) {
     case 'pending':
-      config = { color: '#B45309', label: 'Order Received', progress: 0.2 };
+      config = { color: COLORS.pending, label: 'Order Received', progress: 0.2 };
       break;
     case 'cooking':
-      config = { color: '#1D4ED8', label: 'Cooking Now', progress: 0.5 };
+      config = { color: COLORS.cooking, label: 'Cooking Now', progress: 0.5 };
       lottieSource = "https://lottie.host/f83bf95f-ec6a-4c4c-939c-97d56fa85beb/kXUGrR2XiI.lottie";
       break;
     case 'ready':
-      config = { color: '#047857', label: 'Ready for Pickup', progress: 0.8 };
+      config = { color: COLORS.ready, label: 'Ready for Pickup', progress: 0.8 };
       lottieSource = "https://lottie.host/2f4d2d29-496f-4c11-acdf-4fe9141ba241/eOpmUQ1LDI.lottie";
       break;
     case 'delivered':
-      config = { color: COLORS.obsidian, label: 'Delivered', progress: 1.0 };
+      config = { color: COLORS.delivered, label: 'Delivered', progress: 1.0 };
       break;
     case 'rejected':
-      config = { color: '#EF4444', label: 'Order Cancelled', progress: 0 };
+      config = { color: COLORS.rejected, label: 'Order Cancelled', progress: 0 };
       lottieSource = "https://lottie.host/dc405669-d1f8-47a0-887b-a5c62c15da39/00vc7FA6Ei.lottie";
       break;
   }
@@ -113,7 +123,7 @@ export default function OrdersScreen() {
       if (error) throw error;
       setOrders(data || []);
     } catch (error) {
-      console.log('Fetch Error:', error);
+      console.log('Fetch Error:', error); // Retained per guidelines for catch blocks
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -122,15 +132,13 @@ export default function OrdersScreen() {
 
   useFocusEffect(useCallback(() => { fetchOrders(); }, []));
 
-  // 2. ⚡️ REALTIME LISTENER (FIXED BINDING) ⚡️
+  // 2. ⚡️ REALTIME LISTENER
   useEffect(() => {
     let channel;
 
     const initializeRealtime = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-
-      console.log("🛠 Realtime Initialization for User:", user.id);
 
       // Unique channel prevents "binding mismatch" errors
       channel = supabase.channel(`public:orders:user=${user.id}`)
@@ -143,8 +151,6 @@ export default function OrdersScreen() {
             filter: `user_id=eq.${user.id}` 
           },
           (payload) => {
-            console.log('⚡️ EVENT RECEIVED:', payload.eventType);
-            
             if (payload.eventType === 'UPDATE') {
               // Optimistic UI update: only swap the modified order
               setOrders((prev) => 
@@ -156,9 +162,7 @@ export default function OrdersScreen() {
             }
           }
         )
-        .subscribe((status) => {
-          console.log('🔌 SUBSCRIPTION STATUS:', status);
-        });
+        .subscribe();
     };
 
     initializeRealtime();
@@ -180,7 +184,9 @@ export default function OrdersScreen() {
 
     return (
       <View style={styles.cardContainer}>
-        <View style={styles.cardHeader}><OrderStatus status={item.status} /></View>
+        <View style={styles.cardHeader}>
+            <OrderStatus status={item.status} />
+        </View>
         <View style={styles.cardContent}>
           <Image 
             source={{ uri: firstItem?.menu_items?.image_url || 'https://via.placeholder.com/100' }} 
@@ -200,7 +206,7 @@ export default function OrdersScreen() {
           <View style={styles.cardFooter}>
             <TouchableOpacity style={styles.trackButton}>
               <Text style={styles.trackButtonText}>Track Order</Text>
-              <Ionicons name="chevron-forward" size={16} color="white" />
+              <Ionicons name="chevron-forward" size={16} color={COLORS.white} />
             </TouchableOpacity>
           </View>
         )}
@@ -211,9 +217,13 @@ export default function OrdersScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" />
-      <View style={styles.screenHeader}><Text style={styles.screenTitle}>My Orders</Text></View>
+      <View style={styles.screenHeader}>
+          <Text style={styles.screenTitle}>My Orders</Text>
+      </View>
       {loading ? (
-        <View style={styles.loaderContainer}><ActivityIndicator size="large" color={COLORS.primary} /></View>
+        <View style={styles.loaderContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+        </View>
       ) : (
         <FlatList
           data={orders}
@@ -229,29 +239,126 @@ export default function OrdersScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  loaderContainer: { flex: 1, justifyContent: 'center' },
-  screenHeader: { padding: 20 },
-  screenTitle: { fontSize: 28, fontWeight: '800', color: COLORS.obsidian },
-  listContent: { paddingHorizontal: 20, paddingBottom: 100 },
-  cardContainer: { backgroundColor: COLORS.surface, borderRadius: 24, marginBottom: 20, borderWidth: 1, borderColor: COLORS.border, elevation: 3, overflow: 'hidden' },
-  cardHeader: { backgroundColor: '#FAFAFA', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-  statusHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  statusTitle: { fontSize: 16, fontWeight: '800' },
-  statusSub: { fontSize: 12, color: COLORS.subtext },
-  lottieWrapper: { width: 50, height: 50 },
-  lottie: { width: '100%', height: '100%' },
-  staticIcon: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
-  progressBarBg: { height: 4, backgroundColor: '#E5E7EB', borderRadius: 2, overflow: 'hidden' },
-  progressBarFill: { height: '100%', borderRadius: 2 },
-  cardContent: { flexDirection: 'row', padding: 16 },
-  foodImage: { width: 60, height: 60, borderRadius: 12 },
-  infoColumn: { flex: 1, marginLeft: 16, justifyContent: 'center' },
-  rowBetween: { flexDirection: 'row', justifyContent: 'space-between' },
-  foodTitle: { fontSize: 16, fontWeight: '700' },
-  priceTag: { fontSize: 16, fontWeight: '800', color: COLORS.primary },
-  foodSubtitle: { fontSize: 13, color: COLORS.subtext },
-  cardFooter: { paddingHorizontal: 16, paddingBottom: 16 },
-  trackButton: { backgroundColor: COLORS.obsidian, paddingVertical: 12, borderRadius: 14, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
-  trackButtonText: { color: 'white', fontWeight: '700', marginRight: 8 }
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  loaderContainer: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  screenHeader: {
+    padding: 20,
+  },
+  screenTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: COLORS.obsidian,
+  },
+  listContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 100,
+  },
+  cardContainer: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 24,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    elevation: 3,
+    overflow: 'hidden',
+  },
+  cardHeader: {
+    backgroundColor: COLORS.cardHeaderBg,
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.cardHeaderBorder,
+  },
+  statusHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  statusTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  statusSub: {
+    fontSize: 12,
+    color: COLORS.subtext,
+  },
+  lottieWrapper: {
+    width: 50,
+    height: 50,
+  },
+  lottie: {
+    width: '100%',
+    height: '100%',
+  },
+  staticIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  progressBarBg: {
+    height: 4,
+    backgroundColor: COLORS.progressBarBg,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  cardContent: {
+    flexDirection: 'row',
+    padding: 16,
+  },
+  foodImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 12,
+  },
+  infoColumn: {
+    flex: 1,
+    marginLeft: 16,
+    justifyContent: 'center',
+  },
+  rowBetween: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  foodTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  priceTag: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.primary,
+  },
+  foodSubtitle: {
+    fontSize: 13,
+    color: COLORS.subtext,
+  },
+  cardFooter: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  trackButton: {
+    backgroundColor: COLORS.obsidian,
+    paddingVertical: 12,
+    borderRadius: 14,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  trackButtonText: {
+    color: COLORS.white,
+    fontWeight: '700',
+    marginRight: 8,
+  },
 });

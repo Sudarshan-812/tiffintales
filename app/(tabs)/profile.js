@@ -9,20 +9,14 @@ import {
   StatusBar,
   Alert,
   ActivityIndicator,
-  Dimensions
 } from 'react-native';
 
-// Third-party Imports
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-// Local Imports
 import { supabase } from '../../lib/supabase';
 
-const { width } = Dimensions.get('window');
-
-// 🎨 Updated Premium Theme
 const COLORS = {
   background: '#F9FAFB',
   surface: '#FFFFFF',
@@ -36,6 +30,21 @@ const COLORS = {
   gold: '#F59E0B',
   blue: '#3B82F6',
   green: '#10B981',
+  white: '#FFFFFF',
+  
+  // UI Specific
+  switchTrack: '#CBD5E1',
+  iconDefault: '#CBD5E1',
+  
+  // Badge/Background Colors
+  goldBg: '#FFFBEB',
+  goldBorder: '#FEF3C7',
+  blueBg: '#E0F2FE',
+  greenBg: '#DCFCE7',
+  goldBgAlt: '#FEF3C7',
+  grayBg: '#F3F4F6',
+  redBg: '#FFF1F2',
+  redBorder: '#FFE4E6',
 };
 
 const MenuItem = ({ icon, color, bg, label, subtext, onPress, hasSwitch, switchValue, onSwitchChange, badge, isDestructive }) => (
@@ -56,13 +65,13 @@ const MenuItem = ({ icon, color, bg, label, subtext, onPress, hasSwitch, switchV
       <Switch
         value={switchValue}
         onValueChange={onSwitchChange}
-        trackColor={{ false: '#CBD5E1', true: COLORS.primary }}
-        thumbColor={'#fff'}
+        trackColor={{ false: COLORS.switchTrack, true: COLORS.primary }}
+        thumbColor={COLORS.white}
       />
     ) : badge ? (
       <View style={styles.badge}><Text style={styles.badgeText}>{badge}</Text></View>
     ) : (
-      <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
+      <Ionicons name="chevron-forward" size={18} color={COLORS.iconDefault} />
     )}
   </TouchableOpacity>
 );
@@ -91,6 +100,8 @@ export default function ProfileScreen() {
         .eq('id', user.id)
         .single();
 
+      if (error) throw error;
+
       setProfile({
         ...(data || {}),
         email: user.email,
@@ -98,7 +109,7 @@ export default function ProfileScreen() {
         joined: new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
       });
     } catch (error) {
-      console.log(error);
+      console.error(error);
     } finally {
       setLoading(false);
     }
@@ -125,7 +136,7 @@ export default function ProfileScreen() {
 
   if (loading && !profile) {
     return (
-      <View style={[styles.container, { justifyContent: 'center' }]}>
+      <View style={styles.loaderContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
@@ -135,15 +146,15 @@ export default function ProfileScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
       
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
-        {/* --- 👤 NEW HERO SECTION --- */}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        {/* --- HERO SECTION --- */}
         <View style={[styles.heroSection, { paddingTop: insets.top + 20 }]}>
           <View style={styles.avatarWrapper}>
             <View style={styles.avatar}>
                <Text style={styles.avatarText}>{getInitials(profile?.full_name)}</Text>
             </View>
             <TouchableOpacity style={styles.editBadge}>
-                <Ionicons name="camera" size={14} color="white" />
+                <Ionicons name="camera" size={14} color={COLORS.white} />
             </TouchableOpacity>
           </View>
 
@@ -156,7 +167,7 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* --- 📊 STATS CARD --- */}
+        {/* --- STATS CARD --- */}
         <View style={styles.statsRow}>
             <View style={styles.statBox}>
                 <Text style={styles.statValue}>12</Text>
@@ -174,14 +185,14 @@ export default function ProfileScreen() {
             </View>
         </View>
 
-        {/* --- 📦 MAIN MENU --- */}
+        {/* --- MAIN MENU --- */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>ACCOUNT SETTINGS</Text>
           <View style={styles.group}>
             <MenuItem
               icon="person-outline"
               color={COLORS.blue}
-              bg="#E0F2FE"
+              bg={COLORS.blueBg}
               label="Personal Information"
               subtext="Edit your name and phone"
             />
@@ -197,7 +208,7 @@ export default function ProfileScreen() {
             <MenuItem
               icon="location-outline"
               color={COLORS.green}
-              bg="#DCFCE7"
+              bg={COLORS.greenBg}
               label="Saved Addresses"
               subtext="Hostel, College, Gym"
             />
@@ -210,7 +221,7 @@ export default function ProfileScreen() {
             <MenuItem
               icon="notifications-outline"
               color={COLORS.gold}
-              bg="#FEF3C7"
+              bg={COLORS.goldBgAlt}
               label="Push Notifications"
               hasSwitch
               switchValue={notifications}
@@ -220,13 +231,13 @@ export default function ProfileScreen() {
              <MenuItem
               icon="shield-checkmark-outline"
               color={COLORS.obsidian}
-              bg="#F3F4F6"
+              bg={COLORS.grayBg}
               label="Privacy & Security"
             />
           </View>
         </View>
 
-        {/* --- ⚠️ LOGOUT --- */}
+        {/* --- LOGOUT --- */}
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
           <Ionicons name="log-out" size={20} color={COLORS.red} />
           <Text style={styles.logoutBtnText}>Sign Out of TiffinTales</Text>
@@ -239,7 +250,18 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  loaderContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    backgroundColor: COLORS.background,
+  },
+  scrollContent: {
+    paddingBottom: 100,
+  },
   
   // Hero Section
   heroSection: {
@@ -248,7 +270,7 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
     borderBottomLeftRadius: 40,
     borderBottomRightRadius: 40,
-    shadowColor: '#000',
+    shadowColor: COLORS.obsidian, // Using obsidian for standard shadow/elevation usually defaults to black but following theme const
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.05,
     shadowRadius: 20,
@@ -268,7 +290,11 @@ const styles = StyleSheet.create({
     borderWidth: 4,
     borderColor: COLORS.primaryLight,
   },
-  avatarText: { fontSize: 36, fontWeight: '800', color: 'white' },
+  avatarText: {
+    fontSize: 36,
+    fontWeight: '800',
+    color: COLORS.white,
+  },
   editBadge: {
     position: 'absolute',
     bottom: 0,
@@ -280,21 +306,36 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: 'white',
+    borderColor: COLORS.white,
   },
-  userName: { fontSize: 24, fontWeight: '800', color: COLORS.obsidian, marginBottom: 4 },
-  userEmail: { fontSize: 14, color: COLORS.subtext, marginBottom: 12 },
+  userName: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: COLORS.obsidian,
+    marginBottom: 4,
+  },
+  userEmail: {
+    fontSize: 14,
+    color: COLORS.subtext,
+    marginBottom: 12,
+  },
   membershipBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFBEB',
+    backgroundColor: COLORS.goldBg,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#FEF3C7',
+    borderColor: COLORS.goldBorder,
   },
-  membershipText: { fontSize: 11, fontWeight: '700', color: COLORS.gold, marginLeft: 5, textTransform: 'uppercase' },
+  membershipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.gold,
+    marginLeft: 5,
+    textTransform: 'uppercase',
+  },
 
   // Stats
   statsRow: {
@@ -304,41 +345,110 @@ const styles = StyleSheet.create({
     marginTop: -25,
     borderRadius: 24,
     padding: 20,
-    shadowColor: '#000',
+    shadowColor: COLORS.obsidian,
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.1,
     shadowRadius: 10,
     elevation: 10,
   },
-  statBox: { flex: 1, alignItems: 'center' },
-  statValue: { fontSize: 18, fontWeight: '800', color: COLORS.obsidian },
-  statLabel: { fontSize: 11, color: COLORS.subtext, fontWeight: '600', marginTop: 2 },
-  statDivider: { width: 1, height: '60%', backgroundColor: COLORS.border, alignSelf: 'center' },
+  statBox: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.obsidian,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: COLORS.subtext,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  statDivider: {
+    width: 1,
+    height: '60%',
+    backgroundColor: COLORS.border,
+    alignSelf: 'center',
+  },
 
   // Sections
-  section: { marginTop: 30, paddingHorizontal: 20 },
-  sectionLabel: { fontSize: 12, fontWeight: '800', color: COLORS.subtext, marginLeft: 10, marginBottom: 10, letterSpacing: 1 },
-  group: { backgroundColor: COLORS.surface, borderRadius: 24, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border },
-  menuItem: { flexDirection: 'row', alignItems: 'center', padding: 16 },
-  divider: { height: 1, backgroundColor: COLORS.border, marginLeft: 65 },
-  iconBox: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  menuTextContainer: { flex: 1, marginLeft: 15 },
-  menuLabel: { fontSize: 15, fontWeight: '700', color: COLORS.text },
-  menuSubtext: { fontSize: 12, color: COLORS.subtext, marginTop: 2 },
+  section: {
+    marginTop: 30,
+    paddingHorizontal: 20,
+  },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: COLORS.subtext,
+    marginLeft: 10,
+    marginBottom: 10,
+    letterSpacing: 1,
+  },
+  group: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 24,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginLeft: 65,
+  },
+  iconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  menuTextContainer: {
+    flex: 1,
+    marginLeft: 15,
+  },
+  menuLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  menuSubtext: {
+    fontSize: 12,
+    color: COLORS.subtext,
+    marginTop: 2,
+  },
 
   // Logout
   logoutBtn: {
     marginHorizontal: 20,
     marginTop: 40,
-    backgroundColor: '#FFF1F2',
+    backgroundColor: COLORS.redBg,
     padding: 18,
     borderRadius: 24,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#FFE4E6',
+    borderColor: COLORS.redBorder,
   },
-  logoutBtnText: { color: COLORS.red, fontWeight: '800', fontSize: 16, marginLeft: 10 },
-  version: { textAlign: 'center', marginTop: 20, color: COLORS.subtext, fontSize: 12, fontWeight: '600' }
+  logoutBtnText: {
+    color: COLORS.red,
+    fontWeight: '800',
+    fontSize: 16,
+    marginLeft: 10,
+  },
+  version: {
+    textAlign: 'center',
+    marginTop: 20,
+    color: COLORS.subtext,
+    fontSize: 12,
+    fontWeight: '600',
+  },
 });

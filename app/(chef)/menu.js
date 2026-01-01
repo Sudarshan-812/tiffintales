@@ -13,15 +13,12 @@ import {
   TouchableWithoutFeedback
 } from 'react-native';
 
-// Third-party Imports
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-// Local Imports
 import { supabase } from '../../lib/supabase';
 
-// Brand Theme Constants
 const COLORS = {
   background: '#FDFBF7',
   surface: '#FFFFFF',
@@ -31,15 +28,19 @@ const COLORS = {
   border: '#E2E8F0',
   error: '#EF4444',
   success: '#10B981',
-  primary: '#7E22CE', // Purple
+  primary: '#7E22CE',
+  vegBadgeBg: '#ECFDF5',
+  nonVegBadgeBg: '#FEF2F2',
+  placeholder: '#F1F5F9',
+  overlay: 'rgba(255, 255, 255, 0.95)',
+  fabShadow: '#7E22CE', // Primary color for shadow
+  menuItemBg1: '#F3E8FF',
+  menuItemBg2: '#F1F5F9',
 };
 
 /**
  * MenuItemCard
  * Renders individual dish details and handles delete interactions.
- * @param {object} props
- * @param {object} props.item - The menu item data object
- * @param {function} props.onDelete - Callback when delete is pressed
  */
 const MenuItemCard = ({ item, onDelete }) => {
   // Logic: Treat null or undefined as Veg; only strict false is Non-Veg
@@ -63,7 +64,7 @@ const MenuItemCard = ({ item, onDelete }) => {
         </Text>
         <View style={styles.footer}>
           <Text style={styles.price}>₹{item.price}</Text>
-          <View style={[styles.badge, { backgroundColor: isVeg ? '#ECFDF5' : '#FEF2F2' }]}>
+          <View style={[styles.badge, { backgroundColor: isVeg ? COLORS.vegBadgeBg : COLORS.nonVegBadgeBg }]}>
             <View style={[styles.dot, { backgroundColor: isVeg ? COLORS.success : COLORS.error }]} />
             <Text style={[styles.badgeText, { color: isVeg ? COLORS.success : COLORS.error }]}>
               {isVeg ? 'VEG' : 'NON-VEG'}
@@ -79,12 +80,10 @@ export default function ChefMenuScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  // Data State
   const [menuItems, setMenuItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Animation State
   const [menuOpen, setMenuOpen] = useState(false);
   const animation = useRef(new Animated.Value(0)).current;
 
@@ -126,8 +125,6 @@ export default function ChefMenuScreen() {
 
   /**
    * Handles deletion confirmation and database removal.
-   * @param {string} id - Item ID
-   * @param {string} name - Item Name (for alert context)
    */
   const handleDelete = (id, name) => {
     Alert.alert(
@@ -228,7 +225,7 @@ export default function ChefMenuScreen() {
             style={styles.menuItem}
             onPress={() => { toggleMenu(); router.push('/(chef)/add'); }}
           >
-            <View style={[styles.menuIconBg, { backgroundColor: '#F3E8FF' }]}>
+            <View style={[styles.menuIconBg, { backgroundColor: COLORS.menuItemBg1 }]}>
               <Ionicons name="sparkles" size={20} color={COLORS.primary} />
             </View>
             <Text style={styles.menuLabel}>AI Quick Add</Text>
@@ -238,7 +235,7 @@ export default function ChefMenuScreen() {
             style={styles.menuItem}
             onPress={() => { toggleMenu(); router.push('/(chef)/add'); }}
           >
-            <View style={[styles.menuIconBg, { backgroundColor: '#F1F5F9' }]}>
+            <View style={[styles.menuIconBg, { backgroundColor: COLORS.menuItemBg2 }]}>
               <Ionicons name="create" size={20} color={COLORS.obsidian} />
             </View>
             <Text style={styles.menuLabel}>Manual Entry</Text>
@@ -249,7 +246,7 @@ export default function ChefMenuScreen() {
         {/* Main Toggle Button */}
         <TouchableWithoutFeedback onPress={toggleMenu}>
           <Animated.View style={[styles.fab, rotation]}>
-            <Ionicons name="add" size={32} color="white" />
+            <Ionicons name="add" size={32} color={COLORS.surface} />
           </Animated.View>
         </TouchableWithoutFeedback>
       </View>
@@ -279,7 +276,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 2
   },
-  // List
   listContent: {
     padding: 20,
     paddingBottom: 100
@@ -289,14 +285,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center'
   },
-  // Card
   card: {
     flexDirection: 'row',
     backgroundColor: COLORS.surface,
     borderRadius: 20,
     padding: 12,
     marginBottom: 16,
-    shadowColor: '#000',
+    shadowColor: COLORS.obsidian, // Using standard shadow color
     shadowOpacity: 0.03,
     shadowRadius: 12,
     elevation: 2,
@@ -307,7 +302,7 @@ const styles = StyleSheet.create({
     width: 90,
     height: 90,
     borderRadius: 14,
-    backgroundColor: '#F1F5F9'
+    backgroundColor: COLORS.placeholder
   },
   content: {
     flex: 1,
@@ -364,7 +359,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.5
   },
-  // Empty State
   emptyState: {
     alignItems: 'center',
     marginTop: 60,
@@ -374,7 +368,7 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: COLORS.placeholder,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20
@@ -391,7 +385,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 22
   },
-  // FAB Styles
   fabContainer: {
     position: 'absolute',
     bottom: 30,
@@ -405,7 +398,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: COLORS.primary,
+    shadowColor: COLORS.fabShadow,
     shadowOpacity: 0.4,
     shadowOffset: { width: 0, height: 8 },
     shadowRadius: 16,
@@ -413,7 +406,7 @@ const styles = StyleSheet.create({
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: COLORS.overlay,
     zIndex: 1
   },
   menuItemsContainer: {
@@ -431,7 +424,7 @@ const styles = StyleSheet.create({
     padding: 8,
     paddingHorizontal: 16,
     borderRadius: 16,
-    shadowColor: '#000',
+    shadowColor: COLORS.obsidian,
     shadowOpacity: 0.1,
     shadowRadius: 10,
     elevation: 4,

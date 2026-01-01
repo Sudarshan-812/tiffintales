@@ -10,14 +10,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import * as Animatable from 'react-native-animatable'; // Ensure you ran the install command!
+import * as Animatable from 'react-native-animatable';
 
-// Third-party Imports
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
-// Local Imports
 import { supabase } from '../../lib/supabase';
 import { useCart } from '../../lib/store';
 import OrderCard from '../../components/OrderCard';
@@ -32,6 +30,10 @@ const COLORS = {
   red: '#EF4444',
   border: '#E2E8F0',
   success: '#10B981',
+  obsidianGradientStart: '#0F172A',
+  obsidianGradientEnd: '#1E293B',
+  statLabelLight: 'rgba(255,255,255,0.5)',
+  statIconBackground: 'rgba(255,255,255,0.1)',
 };
 
 const DashboardHeader = ({ stats, onLogout }) => (
@@ -48,7 +50,7 @@ const DashboardHeader = ({ stats, onLogout }) => (
 
     <View style={styles.mainStatsContainer}>
       <LinearGradient
-        colors={[COLORS.obsidian, '#1E293B']}
+        colors={[COLORS.obsidianGradientStart, COLORS.obsidianGradientEnd]}
         style={styles.primaryStatCard}
       >
         <View style={styles.statInfo}>
@@ -56,7 +58,7 @@ const DashboardHeader = ({ stats, onLogout }) => (
           <Text style={styles.revenueValue}>₹{stats.earnings}</Text>
         </View>
         <View style={styles.statIconCircle}>
-          <Ionicons name="wallet-outline" size={24} color="white" />
+          <Ionicons name="wallet-outline" size={24} color={COLORS.white} />
         </View>
       </LinearGradient>
 
@@ -103,17 +105,19 @@ export default function ChefDashboard() {
       const orderList = data || [];
       setOrders(orderList);
 
+      // Calculate earnings for today only for 'ready' orders
       const today = new Date().toISOString().split('T')[0];
       const todayEarnings = orderList
         .filter(o => o.created_at.startsWith(today) && o.status === 'ready')
         .reduce((sum, o) => sum + parseFloat(o.total_price || 0), 0);
 
+      // Calculate active orders count
       const activeOrderCount = orderList
         .filter(o => ['pending', 'cooking'].includes(o.status)).length;
 
       setStats({ earnings: todayEarnings, active: activeOrderCount });
     } catch (error) {
-      console.error(error);
+      console.error(error); // console.error for catch blocks as per guidelines
     } finally {
       setLoading(false);
     }
@@ -152,7 +156,7 @@ export default function ChefDashboard() {
   return (
     <View style={styles.container}>
       <StatusBar style="dark" />
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
         <FlatList
           data={orders}
           keyExtractor={(item) => item.id.toString()}
@@ -162,7 +166,7 @@ export default function ChefDashboard() {
             </Animatable.View>
           )}
           ListHeaderComponent={<DashboardHeader stats={stats} onLogout={signOut} />}
-          contentContainerStyle={{ paddingBottom: 40 }}
+          contentContainerStyle={styles.listContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchDashboardData} />}
         />
       </SafeAreaView>
@@ -171,24 +175,131 @@ export default function ChefDashboard() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  headerWrapper: { padding: 20 },
-  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  welcomeText: { fontSize: 24, fontWeight: '900', color: COLORS.obsidian },
-  statusSubtext: { fontSize: 13, color: COLORS.gray, fontWeight: '600' },
-  powerBtn: { width: 44, height: 44, borderRadius: 14, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center', elevation: 2 },
-  mainStatsContainer: { flexDirection: 'row', gap: 12, marginBottom: 25 },
-  primaryStatCard: { flex: 1.8, borderRadius: 24, padding: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  secondaryStatCard: { flex: 1, backgroundColor: 'white', borderRadius: 24, padding: 20, justifyContent: 'center', borderWidth: 1, borderColor: COLORS.border },
-  statInfo: { flex: 1 },
-  statLabelLight: { fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.5)', letterSpacing: 1 },
-  statLabelDark: { fontSize: 10, fontWeight: '800', color: COLORS.gray, letterSpacing: 1 },
-  revenueValue: { fontSize: 24, fontWeight: '900', color: 'white', marginTop: 4 },
-  activeValue: { fontSize: 24, fontWeight: '900', color: COLORS.obsidian, marginTop: 4 },
-  statIconCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' },
-  activeIndicator: { position: 'absolute', top: 15, right: 15, width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.accent },
-  feedHeader: { flexDirection: 'row', alignItems: 'center', paddingLeft: 5 },
-  liveDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.success, marginRight: 8 },
-  feedTitle: { fontSize: 11, fontWeight: '900', color: COLORS.gray, letterSpacing: 1.5 },
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  listContent: {
+    paddingBottom: 40,
+  },
+  loader: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerWrapper: {
+    padding: 20,
+  },
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  welcomeText: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: COLORS.obsidian,
+  },
+  statusSubtext: {
+    fontSize: 13,
+    color: COLORS.gray,
+    fontWeight: '600',
+  },
+  powerBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: COLORS.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+  },
+  mainStatsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 25,
+  },
+  primaryStatCard: {
+    flex: 1.8,
+    borderRadius: 24,
+    padding: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  secondaryStatCard: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    borderRadius: 24,
+    padding: 20,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  statInfo: {
+    flex: 1,
+  },
+  statLabelLight: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.statLabelLight,
+    letterSpacing: 1,
+  },
+  statLabelDark: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.gray,
+    letterSpacing: 1,
+  },
+  revenueValue: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: COLORS.white,
+    marginTop: 4,
+  },
+  activeValue: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: COLORS.obsidian,
+    marginTop: 4,
+  },
+  statIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.statIconBackground,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  activeIndicator: {
+    position: 'absolute',
+    top: 15,
+    right: 15,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.accent,
+  },
+  feedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 5,
+  },
+  liveDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: COLORS.success,
+    marginRight: 8,
+  },
+  feedTitle: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: COLORS.gray,
+    letterSpacing: 1.5,
+  },
 });

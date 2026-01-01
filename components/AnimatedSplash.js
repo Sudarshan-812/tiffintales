@@ -8,6 +8,7 @@ import {
   Easing,
   Platform
 } from 'react-native';
+
 import { StatusBar } from 'expo-status-bar';
 import LottieView from 'lottie-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -22,6 +23,9 @@ const COLORS = {
   white: '#FFFFFF',
   glass: 'rgba(255, 255, 255, 0.1)',
   glassBorder: 'rgba(255, 255, 255, 0.15)',
+  textShadow: 'rgba(0,0,0,0.2)',
+  taglineText: 'rgba(255, 255, 255, 0.8)',
+  footerText: 'rgba(255,255,255,0.3)',
 };
 
 export default function AnimatedSplash({ onFinish }) {
@@ -53,12 +57,12 @@ export default function AnimatedSplash({ onFinish }) {
       ]),
 
       // 2. Hold (3s)
-      Animated.delay(3000), //3000
+      Animated.delay(3000),
 
       // 3. Exit (0.5s)
       Animated.timing(opacityAnim, {
         toValue: 0,
-        duration: 500,   //500
+        duration: 500,
         useNativeDriver: true,
       }),
     ]).start(({ finished }) => {
@@ -93,11 +97,10 @@ export default function AnimatedSplash({ onFinish }) {
 
         {/* TYPOGRAPHY SECTION */}
         <Animated.View 
-          style={{ 
-            transform: [{ translateY: textTranslateY }],
-            alignItems: 'center',
-            marginTop: 20 
-          }}
+          style={[
+            styles.typographyContainer,
+            { transform: [{ translateY: textTranslateY }] }
+          ]}
         >
           {/* Main Title */}
           <Text style={styles.brandTitle}>
@@ -108,7 +111,6 @@ export default function AnimatedSplash({ onFinish }) {
           <View style={styles.taglinePill}>
             <Text style={styles.taglineText}>HOMEMADE HAPPINESS</Text>
           </View>
-
         </Animated.View>
 
       </Animated.View>
@@ -146,7 +148,11 @@ const styles = StyleSheet.create({
     height: '100%',
   },
 
-  // Typography Redesign
+  // Typography
+  typographyContainer: {
+    alignItems: 'center',
+    marginTop: 20,
+  },
   brandTitle: {
     fontSize: 42,
     // iOS gets Avenir Next (Premium), Android gets sans-serif-medium
@@ -155,7 +161,7 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     letterSpacing: -1, // Tighter spacing looks more modern
     marginBottom: 16,
-    textShadowColor: 'rgba(0,0,0,0.2)',
+    textShadowColor: COLORS.textShadow,
     textShadowOffset: { width: 0, height: 4 },
     textShadowRadius: 10,
   },
@@ -176,7 +182,7 @@ const styles = StyleSheet.create({
   },
   taglineText: {
     fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: COLORS.taglineText,
     fontWeight: '700',
     letterSpacing: 2, // Wide spacing for tagline
     textTransform: 'uppercase',
@@ -188,7 +194,7 @@ const styles = StyleSheet.create({
     bottom: 50,
   },
   footerText: {
-    color: 'rgba(255,255,255,0.3)',
+    color: COLORS.footerText,
     fontSize: 12,
     fontWeight: '600',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',

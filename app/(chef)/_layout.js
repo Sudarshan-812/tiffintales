@@ -1,28 +1,25 @@
 import React from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
+
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-const THEME = {
-  colors: {
-    primary: '#7E22CE', // Deep Purple
-    obsidian: '#0F172A', // Dark Professional Accent
-    gray: '#94A3B8',    // Inactive Slate
-    surface: 'rgba(255, 255, 255, 0.98)', // High-fidelity surface
-    border: '#E2E8F0',
-  },
+const COLORS = {
+  primary: '#7E22CE',
+  obsidian: '#0F172A',
+  gray: '#94A3B8',
+  surface: 'rgba(255, 255, 255, 0.98)',
+  border: '#E2E8F0',
+  shadow: '#000000',
 };
 
-/**
- * High-Quality Tab Icon
- * Uniform sizing with a simple "+" for the Add section.
- */
+
 const TabBarIcon = ({ focused, color, iconDefault, iconFocused }) => (
   <View style={styles.iconContainer}>
     {focused && <View style={styles.activeIndicator} />}
     <Ionicons
       name={focused ? iconFocused : iconDefault}
-      size={focused ? 26 : 24} // Simple + is 26 for visual weight balance
+      size={focused ? 26 : 24} 
       color={color}
     />
   </View>
@@ -33,8 +30,8 @@ export default function ChefLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: THEME.colors.primary,
-        tabBarInactiveTintColor: THEME.colors.gray,
+        tabBarActiveTintColor: COLORS.primary,
+        tabBarInactiveTintColor: COLORS.gray,
         tabBarShowLabel: true,
         tabBarLabelStyle: styles.tabLabel,
         tabBarStyle: styles.tabBar,
@@ -65,7 +62,7 @@ export default function ChefLayout() {
         options={{
           title: 'Add Dish',
           tabBarIcon: (props) => (
-            <TabBarIcon {...props} iconDefault="add-outline" iconFocused="add" /> // ✅ Simple + Icon
+            <TabBarIcon {...props} iconDefault="add-outline" iconFocused="add" />
           ),
         }}
       />
@@ -85,17 +82,17 @@ export default function ChefLayout() {
 
 const styles = StyleSheet.create({
   tabBar: {
-    backgroundColor: THEME.colors.surface,
+    backgroundColor: COLORS.surface,
     height: Platform.OS === 'ios' ? 90 : 70,
     paddingTop: 12,
     paddingBottom: Platform.OS === 'ios' ? 30 : 12,
     
-    // 🌑 Obsidian Top Separator
+    // Obsidian Top Separator
     borderTopWidth: 1.5,
-    borderTopColor: THEME.colors.obsidian, 
+    borderTopColor: COLORS.obsidian,
     
     // Shadow for elevation
-    shadowColor: '#000',
+    shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: -3 },
     shadowOpacity: 0.05,
     shadowRadius: 10,
@@ -103,9 +100,9 @@ const styles = StyleSheet.create({
   },
   tabLabel: {
     fontSize: 10,
-    fontWeight: '800', // Heavy weight for professional look
+    fontWeight: '800',
     marginTop: 4,
-    textTransform: 'uppercase', // Dashboard aesthetic
+    textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   iconContainer: {
@@ -116,10 +113,10 @@ const styles = StyleSheet.create({
   },
   activeIndicator: {
     position: 'absolute',
-    top: -13, // Aligns perfectly with the obsidian top border
+    top: -13, 
     width: 24,
     height: 4,
-    backgroundColor: THEME.colors.primary,
+    backgroundColor: COLORS.primary,
     borderBottomLeftRadius: 6,
     borderBottomRightRadius: 6,
   },

@@ -14,7 +14,7 @@ import LottieView from 'lottie-react-native';
 
 const { height } = Dimensions.get('window');
 
-// 🎨 Obsidian + Cream Theme Palette
+// Obsidian + Cream Theme Palette
 const COLORS = {
   overlay: 'rgba(0,0,0,0.6)',
   surface: '#FFFFFF',
@@ -138,7 +138,7 @@ export default function PaymentModal({ visible, amount, onClose, onConfirmPaymen
 
           ) : status === 'success' ? (
              <View style={styles.centerContainer}>
-               {/* ✅ SUCCESS LOTTIE ANIMATION */}
+               {/* SUCCESS LOTTIE ANIMATION */}
                <LottieView
                  source={{ uri: 'https://lottie.host/b9edd07b-2a52-4486-92f8-39a7f511ac00/XmAfnVpIpc.lottie' }}
                  autoPlay
@@ -148,7 +148,7 @@ export default function PaymentModal({ visible, amount, onClose, onConfirmPaymen
                <Text style={styles.successTitle}>Order Placed!</Text>
                <Text style={styles.successSubtitle}>Your tiffin is being prepared.</Text>
 
-               {/* ✅ NEW DONE BUTTON */}
+               {/* NEW DONE BUTTON */}
                <TouchableOpacity 
                  style={styles.doneButton} 
                  onPress={handleDone}

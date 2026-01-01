@@ -11,32 +11,47 @@ import {
   ScrollView,
   Image,
   StyleSheet,
-  Dimensions
+  Dimensions,
 } from 'react-native';
 
-// Third-party Imports
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+import LottieView from 'lottie-react-native';
 
-// Local Imports
 import { supabase } from '../lib/supabase';
 
-const { width, height } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
 
-// 🎨 Clean Professional Theme
 const COLORS = {
   background: '#FFFFFF',
-  text: '#1C1C1C',       // Zomato-like near black
-  subText: '#696969',    // Subtitle gray
-  primary: '#0F172A',    // Obsidian (Brand Color)
-  accent: '#7E22CE',     // Purple Accent
-  border: '#E8E8E8',     // Very subtle border
-  inputBg: '#FFFFFF',
+  text: '#111827',
+  subText: '#6B7280',
+  primary: '#0F172A',
+  accent: '#7C3AED',
+  border: '#E5E7EB',
+  inputBg: '#F9FAFB',
   error: '#EF4444',
-  divider: '#F0F0F0'
+  divider: '#E5E7EB',
+  headerBg: '#F3E8FF',
+  white: '#FFFFFF',
+  placeholder: '#9CA3AF',
+  violetText: '#A78BFA',
+  overlay: 'rgba(15, 23, 42, 0.4)',
+  brandSubtitle: 'rgba(255,255,255,0.9)',
+  
+  // Roles
+  roleCardBg: '#FFFFFF',
+  roleCardActiveBg: '#F8FAFC',
+  roleIconBg: '#F3F4F6',
+  roleIconBgActive: '#FFFFFF',
+  roleSubtitle: '#9CA3AF',
+  
+  // Shadows
+  shadow: '#000000',
+  textShadow: '#000000',
 };
 
 // Configure Google Sign-In
@@ -45,14 +60,14 @@ GoogleSignin.configure({
 });
 
 /**
- * Zomato-Style Clean Input
+ * Modern Input Component
  */
 const AuthInput = ({ placeholder, value, onChangeText, secureTextEntry, isPassword, togglePasswordVisibility, error }) => (
   <View style={styles.inputWrapper}>
-    <View style={[styles.inputContainer, error ? { borderColor: COLORS.error } : null]}>
+    <View style={[styles.inputContainer, error ? styles.inputError : null]}>
       <TextInput
         placeholder={placeholder}
-        placeholderTextColor="#9CA3AF"
+        placeholderTextColor={COLORS.placeholder}
         value={value}
         onChangeText={onChangeText}
         autoCapitalize="none"
@@ -60,8 +75,16 @@ const AuthInput = ({ placeholder, value, onChangeText, secureTextEntry, isPasswo
         style={styles.inputField}
       />
       {isPassword && (
-        <TouchableOpacity onPress={togglePasswordVisibility} style={styles.eyeIcon}>
-          <Text style={styles.eyeText}>{secureTextEntry ? 'Show' : 'Hide'}</Text>
+        <TouchableOpacity 
+          onPress={togglePasswordVisibility} 
+          style={styles.eyeIcon} 
+          hitSlop={styles.hitSlop}
+        >
+          <Ionicons 
+            name={secureTextEntry ? 'eye-off-outline' : 'eye-outline'} 
+            size={20} 
+            color={COLORS.subText} 
+          />
         </TouchableOpacity>
       )}
     </View>
@@ -93,7 +116,7 @@ export default function LoginScreen() {
       const { error } = await supabase.from('profiles').upsert(updates);
       if (error) throw error;
     } catch (e) {
-      console.log('Profile Sync Note:', e.message);
+      console.error('Profile Sync Note:', e.message);
     }
   };
 
@@ -103,11 +126,11 @@ export default function LoginScreen() {
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     
     if (!email || !emailRegex.test(email)) {
-      newErrors.email = 'Enter a valid email';
+      newErrors.email = 'Please enter a valid email';
       valid = false;
     }
     if (!password || password.length < 6) {
-      newErrors.password = 'Min 6 chars required';
+      newErrors.password = 'Min 6 characters required';
       valid = false;
     }
     setErrors(newErrors);
@@ -125,7 +148,7 @@ export default function LoginScreen() {
         if (error) throw error;
         if (user) {
           await ensureProfileExists(user, selectedRole);
-          Alert.alert('Link Sent', 'Check your email to verify account.');
+          Alert.alert('Verification Email Sent', 'Please check your inbox.');
           setMode('login'); 
         }
       } else {
@@ -137,7 +160,7 @@ export default function LoginScreen() {
         }
       }
     } catch (error) {
-      Alert.alert('Error', error.message);
+      Alert.alert('Authentication Failed', error.message);
     } finally {
       setLoading(false);
     }
@@ -174,9 +197,8 @@ export default function LoginScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-    const role = profile?.role || 'student';
     
-    if (role === 'chef') {
+    if (profile?.role === 'chef') {
       router.replace('/(chef)');
     } else {
       router.replace('/(tabs)');
@@ -185,46 +207,51 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       
-      {/* 1. HERO IMAGE (Zomato Style) */}
-      <View style={styles.imageHeader}>
-        <Image 
-          // Replace with a high-quality food image
-          source={{ uri: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=1000&auto=format&fit=crop' }} 
-          style={styles.heroImage} 
+      {/* 1. HEADER AREA (Lottie Animation) */}
+      <View style={styles.headerArea}>
+        <LottieView
+          source={{ uri: 'https://lottie.host/4f1862d5-88a1-4d80-85d9-9bdf5683500e/VKw4jder1r.lottie' }}
+          autoPlay
+          loop
+          style={styles.headerLottie}
+          resizeMode="cover" 
         />
-        <View style={styles.heroOverlay} />
         
-        <View style={[styles.titleContainer, { paddingTop: insets.top + 20 }]}>
-          <Text style={styles.heroTitle}>Tiffin<Text style={{color: '#A78BFA'}}>Tales</Text></Text>
-          <Text style={styles.heroSubtitle}>India's #1 Homemade Food App</Text>
+        <View style={styles.headerOverlay} />
+        
+        <View style={[styles.brandContainer, { paddingTop: insets.top + 20 }]}>
+          <Text style={styles.brandTitle}>Tiffin<Text style={{color: COLORS.violetText}}>Tales</Text></Text>
+          <Text style={styles.brandSubtitle}>Homemade meals, delivered.</Text>
         </View>
       </View>
 
-      {/* 2. WHITE CONTENT SHEET */}
-      <View style={styles.contentSheet}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{flex: 1}}>
+      {/* 2. CARD CONTENT */}
+      <View style={styles.contentContainer}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             
-            {/* Title */}
-            <View style={styles.centerHeader}>
+            {/* Title Row */}
+            <View style={styles.titleRow}>
               <Text style={styles.authTitle}>
-                {mode === 'login' ? 'Login or Signup' : 'Create Account'}
+                {mode === 'login' ? 'Welcome Back' : 'Get Started'}
               </Text>
-              <View style={styles.separator} />
+              <Text style={styles.authSubtitle}>
+                {mode === 'login' ? 'Sign in to continue' : 'Create a new account'}
+              </Text>
             </View>
 
             {/* Inputs */}
             <View style={styles.formGroup}>
               <AuthInput 
-                placeholder="Enter Email Address" 
+                placeholder="Email Address" 
                 value={email} 
                 onChangeText={(t) => { setEmail(t); if(errors.email) setErrors({...errors, email:''}) }} 
                 error={errors.email} 
               />
               <AuthInput 
-                placeholder="Enter Password" 
+                placeholder="Password" 
                 value={password} 
                 onChangeText={(t) => { setPassword(t); if(errors.password) setErrors({...errors, password:''}) }} 
                 isPassword={true} 
@@ -234,46 +261,77 @@ export default function LoginScreen() {
               />
             </View>
 
-            {/* Role Toggle (Clean Segmented Control) */}
-            <View style={styles.roleToggleContainer}>
-              <TouchableOpacity onPress={() => setIsChef(false)} style={[styles.roleTab, !isChef && styles.roleTabActive]}>
-                <Text style={[styles.roleText, !isChef && styles.roleTextActive]}>Student</Text>
+            {/* Role Selection */}
+            <View style={styles.roleContainer}>
+              <TouchableOpacity 
+                activeOpacity={0.8}
+                onPress={() => setIsChef(false)} 
+                style={[styles.roleCard, !isChef && styles.roleCardActive]}
+              >
+                <View style={[styles.roleIconBg, !isChef && styles.roleIconBgActive]}>
+                  <Ionicons name="school-outline" size={20} color={!isChef ? COLORS.primary : COLORS.subText} />
+                </View>
+                <View style={styles.roleTextContainer}>
+                  <Text style={[styles.roleTitle, !isChef && styles.roleTitleActive]}>Student</Text>
+                  <Text style={styles.roleSubtitle}>Ordering food</Text>
+                </View>
+                {!isChef && (
+                  <View style={styles.activeCheck}>
+                    <Ionicons name="checkmark-circle" size={18} color={COLORS.primary} />
+                  </View>
+                )}
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => setIsChef(true)} style={[styles.roleTab, isChef && styles.roleTabActive]}>
-                <Text style={[styles.roleText, isChef && styles.roleTextActive]}>Home Chef</Text>
+
+              <TouchableOpacity 
+                activeOpacity={0.8}
+                onPress={() => setIsChef(true)} 
+                style={[styles.roleCard, isChef && styles.roleCardActive]}
+              >
+                <View style={[styles.roleIconBg, isChef && styles.roleIconBgActive]}>
+                  <Ionicons name="restaurant-outline" size={20} color={isChef ? COLORS.primary : COLORS.subText} />
+                </View>
+                <View style={styles.roleTextContainer}>
+                  <Text style={[styles.roleTitle, isChef && styles.roleTitleActive]}>Home Chef</Text>
+                  <Text style={styles.roleSubtitle}>Cooking food</Text>
+                </View>
+                {isChef && (
+                  <View style={styles.activeCheck}>
+                    <Ionicons name="checkmark-circle" size={18} color={COLORS.primary} />
+                  </View>
+                )}
               </TouchableOpacity>
             </View>
 
-            {/* Main Button */}
-            <TouchableOpacity onPress={handleAuth} disabled={loading} activeOpacity={0.9} style={styles.primaryBtn}>
+            {/* Main Action Button */}
+            <TouchableOpacity onPress={handleAuth} disabled={loading} activeOpacity={0.8} style={styles.primaryBtn}>
               {loading ? (
-                <ActivityIndicator color="white" />
+                <ActivityIndicator color={COLORS.white} />
               ) : (
                 <Text style={styles.primaryBtnText}>
-                  {mode === 'login' ? 'Continue' : 'Create Account'}
+                  {mode === 'login' ? 'Sign In' : 'Sign Up'}
                 </Text>
               )}
             </TouchableOpacity>
 
             {/* Divider */}
-            <View style={styles.dividerContainer}>
+            <View style={styles.dividerRow}>
               <View style={styles.line} />
-              <Text style={styles.orText}>or</Text>
+              <Text style={styles.orText}>OR</Text>
               <View style={styles.line} />
             </View>
 
-            {/* Social Login (Clean Circle) */}
-            <TouchableOpacity onPress={handleGoogleLogin} style={styles.socialBtn}>
-              <Image source={{ uri: 'https://cdn-icons-png.flaticon.com/512/300/300221.png' }} style={styles.socialIcon} />
-              <Text style={styles.socialText}>Continue with Google</Text>
+            {/* Google Button */}
+            <TouchableOpacity onPress={handleGoogleLogin} style={styles.googleBtn} activeOpacity={0.7}>
+              <Image source={{ uri: 'https://cdn-icons-png.flaticon.com/512/300/300221.png' }} style={styles.googleIcon} />
+              <Text style={styles.googleText}>Continue with Google</Text>
             </TouchableOpacity>
 
             {/* Footer Text */}
-            <View style={styles.footerContainer}>
+            <View style={styles.footerRow}>
               <Text style={styles.footerText}>
-                {mode === 'login' ? "New to TiffinTales? " : "Already have an account? "}
+                {mode === 'login' ? "Don't have an account? " : "Already have an account? "}
                 <Text onPress={() => setMode(mode === 'login' ? 'signup' : 'login')} style={styles.linkText}>
-                  {mode === 'login' ? 'Sign up' : 'Log in'}
+                  {mode === 'login' ? 'Sign Up' : 'Log In'}
                 </Text>
               </Text>
             </View>
@@ -286,84 +344,261 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  
-  // Hero Image Section
-  imageHeader: { height: height * 0.35, width: '100%', position: 'relative' },
-  heroImage: { width: '100%', height: '100%', resizeMode: 'cover' },
-  heroOverlay: { 
-    ...StyleSheet.absoluteFillObject, 
-    backgroundColor: 'rgba(0,0,0,0.4)', // Darken image for text readability
-  },
-  titleContainer: { position: 'absolute', bottom: 40, left: 24 },
-  heroTitle: { fontSize: 32, fontWeight: '900', color: 'white', letterSpacing: -1 },
-  heroSubtitle: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.9)', marginTop: 4 },
-
-  // Content Sheet
-  contentSheet: {
+  container: {
     flex: 1,
     backgroundColor: COLORS.background,
-    marginTop: -24, // Pull up over image
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: 10,
   },
-  scrollContent: { paddingHorizontal: 24, paddingBottom: 30 },
+  
+  // Header Area with Lottie
+  headerArea: { 
+    height: height * 0.35, 
+    width: '100%', 
+    position: 'relative',
+    backgroundColor: COLORS.headerBg,
+  },
+  headerLottie: {
+    width: '100%',
+    height: '100%',
+  },
+  headerOverlay: { 
+    ...StyleSheet.absoluteFillObject, 
+    backgroundColor: COLORS.overlay,
+  }, 
+  brandContainer: {
+    position: 'absolute',
+    bottom: 40,
+    left: 24,
+  },
+  brandTitle: { 
+    fontSize: 36, 
+    fontWeight: '900', 
+    color: COLORS.white, 
+    letterSpacing: -1,
+    textShadowColor: COLORS.textShadow,
+    textShadowOffset: { width: -1, height: -1 },
+    textShadowRadius: 3,
+  },
+  brandSubtitle: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: COLORS.brandSubtitle,
+    marginTop: 4,
+  },
 
-  // Header inside sheet
-  centerHeader: { alignItems: 'center', marginTop: 16, marginBottom: 24 },
-  authTitle: { fontSize: 20, fontWeight: '800', color: COLORS.text, letterSpacing: 0.5 },
-  separator: { width: 40, height: 4, backgroundColor: COLORS.border, borderRadius: 2, marginTop: 12 },
+  // Content Sheet
+  contentContainer: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+    marginTop: -24,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    overflow: 'hidden',
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 24,
+    paddingTop: 32,
+    paddingBottom: 40,
+  },
+
+  // Title Section
+  titleRow: {
+    marginBottom: 24,
+  },
+  authTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: COLORS.text,
+    letterSpacing: -0.5,
+  },
+  authSubtitle: {
+    fontSize: 14,
+    color: COLORS.subText,
+    marginTop: 4,
+  },
 
   // Inputs
-  formGroup: { gap: 16, marginBottom: 24 },
-  inputWrapper: { marginBottom: 0 },
+  formGroup: {
+    gap: 16,
+    marginBottom: 24,
+  },
+  inputWrapper: {
+    marginBottom: 0,
+  },
   inputContainer: {
-    flexDirection: 'row', alignItems: 'center',
-    borderWidth: 1, borderColor: COLORS.border,
-    borderRadius: 10, height: 52, paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    height: 54,
+    paddingHorizontal: 16,
     backgroundColor: COLORS.inputBg,
   },
-  inputField: { flex: 1, fontSize: 16, color: COLORS.text, height: '100%' },
-  eyeIcon: { padding: 8 },
-  eyeText: { color: COLORS.primary, fontWeight: '700', fontSize: 13 },
-  errorText: { color: COLORS.error, fontSize: 12, marginTop: 4, marginLeft: 4 },
-
-  // Role Toggle
-  roleToggleContainer: {
-    flexDirection: 'row', backgroundColor: '#F3F4F6', borderRadius: 12, padding: 4, marginBottom: 24,
+  inputError: {
+    borderColor: COLORS.error,
+    borderWidth: 1,
   },
-  roleTab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10 },
-  roleTabActive: { backgroundColor: COLORS.primary, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
-  roleText: { fontSize: 14, fontWeight: '600', color: COLORS.subText },
-  roleTextActive: { color: 'white', fontWeight: '700' },
+  inputField: {
+    flex: 1,
+    fontSize: 15,
+    color: COLORS.text,
+    height: '100%',
+  },
+  eyeIcon: {
+    padding: 4,
+  },
+  hitSlop: {
+    top: 10,
+    bottom: 10,
+    left: 10,
+    right: 10,
+  },
+  errorText: {
+    color: COLORS.error,
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+
+  // Role Selector Cards
+  roleContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 24,
+  },
+  roleCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.roleCardBg,
+    shadowColor: COLORS.shadow,
+    shadowOpacity: 0.02,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1, 
+  },
+  roleCardActive: {
+    borderColor: COLORS.primary,
+    borderWidth: 1.5,
+    backgroundColor: COLORS.roleCardActiveBg,
+  },
+  roleIconBg: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: COLORS.roleIconBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  roleIconBgActive: {
+    backgroundColor: COLORS.roleIconBgActive,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  roleTextContainer: {
+    flex: 1,
+  },
+  roleTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.subText,
+  },
+  roleTitleActive: {
+    color: COLORS.primary, 
+    fontWeight: '700',
+  },
+  roleSubtitle: {
+    fontSize: 11,
+    color: COLORS.roleSubtitle,
+    marginTop: 2,
+  },
+  activeCheck: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+  },
 
   // Primary Button
   primaryBtn: {
     backgroundColor: COLORS.primary,
-    height: 54, borderRadius: 10,
-    justifyContent: 'center', alignItems: 'center',
+    height: 56,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 24,
-    shadowColor: COLORS.primary, shadowOpacity: 0.3, shadowOffset: { width: 0, height: 4 }, elevation: 4
+    shadowColor: COLORS.primary,
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
-  primaryBtnText: { color: 'white', fontSize: 16, fontWeight: '800', letterSpacing: 0.5 },
+  primaryBtnText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
 
   // Divider
-  dividerContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
-  line: { flex: 1, height: 1, backgroundColor: COLORS.border },
-  orText: { marginHorizontal: 12, fontSize: 14, color: '#9CA3AF' },
-
-  // Social
-  socialBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, height: 54,
-    backgroundColor: 'white', marginBottom: 30, gap: 10
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
   },
-  socialIcon: { width: 22, height: 22 },
-  socialText: { fontSize: 15, fontWeight: '600', color: COLORS.text },
+  line: {
+    flex: 1,
+    height: 1,
+    backgroundColor: COLORS.divider,
+  },
+  orText: {
+    marginHorizontal: 16,
+    fontSize: 12,
+    color: COLORS.subText,
+    fontWeight: '600',
+  },
 
-  // Footer Link
-  footerContainer: { alignItems: 'center' },
-  footerText: { fontSize: 14, color: COLORS.subText },
-  linkText: { color: COLORS.primary, fontWeight: '800' },
+  // Social Button
+  googleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 14,
+    height: 56,
+    backgroundColor: COLORS.white,
+    marginBottom: 24,
+    gap: 12,
+  },
+  googleIcon: {
+    width: 20,
+    height: 20,
+  },
+  googleText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+
+  // Footer
+  footerRow: {
+    alignItems: 'center',
+  },
+  footerText: {
+    fontSize: 14,
+    color: COLORS.subText,
+  },
+  linkText: {
+    color: COLORS.primary,
+    fontWeight: '700',
+  },
 });

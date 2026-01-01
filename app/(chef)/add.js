@@ -11,18 +11,15 @@ import {
   StyleSheet,
   Keyboard,
   Animated,
-  Switch,
   StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-// Third-party Imports
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
-// Local Imports
 import { supabase } from '../../lib/supabase';
 
 const COLORS = {
@@ -36,6 +33,13 @@ const COLORS = {
   error: '#EF4444',
   success: '#10B981',
   aiPrimary: '#8B5CF6',
+  white: '#FFFFFF',
+  placeholderGradientStart: '#F8FAFC',
+  placeholderGradientEnd: '#E2E8F0',
+  aiBackground: '#FAF9FF',
+  aiFooterBorder: '#F1F5F9',
+  shadow: '#000000',
+  text: '#0F172A',
 };
 
 const decodeBase64 = (base64) => {
@@ -50,14 +54,12 @@ const decodeBase64 = (base64) => {
 export default function AddDishScreen() {
   const router = useRouter();
 
-  // Form State
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [description, setDescription] = useState('');
   const [image, setImage] = useState(null);
   const [isVeg, setIsVeg] = useState(true);
 
-  // UI State
   const [uploading, setUploading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [errors, setErrors] = useState({ name: '', price: '', image: '' });
@@ -157,63 +159,61 @@ export default function AddDishScreen() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      <SafeAreaView style={{ flex: 1 }}>
+      <SafeAreaView style={styles.safeArea}>
         
         <View style={styles.nav}>
           <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
             <Ionicons name="close" size={22} color={COLORS.obsidian} />
           </TouchableOpacity>
           <Text style={styles.navTitle}>Add Dish</Text>
-          <View style={{ width: 40 }} />
+          <View style={styles.spacer} />
         </View>
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           
-          {/* PHOTO SECTION */}
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>PHOTO</Text>
             <TouchableOpacity onPress={pickImage} style={styles.imagePicker}>
               {image ? (
                 <Image source={{ uri: image.uri }} style={styles.fullImg} />
               ) : (
-                <LinearGradient colors={['#F8FAFC', '#E2E8F0']} style={styles.placeholderGradient}>
+                <LinearGradient colors={[COLORS.placeholderGradientStart, COLORS.placeholderGradientEnd]} style={styles.placeholderGradient}>
                   <Ionicons name="camera-outline" size={32} color={COLORS.gray} />
                   <Text style={styles.placeholderText}>Tap to add photo</Text>
                 </LinearGradient>
               )}
               <View style={styles.floatingBtn}>
-                <Ionicons name={image ? "sync" : "add"} size={18} color="white" />
+                <Ionicons name={image ? "sync" : "add"} size={18} color={COLORS.white} />
               </View>
             </TouchableOpacity>
             {errors.image && <Text style={styles.errorText}>Image is required</Text>}
           </View>
 
-          {/* DETAILS SECTION */}
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>DETAILS</Text>
             
             <Text style={styles.inputLabel}>DISH NAME</Text>
             <TextInput 
               style={[styles.input, errors.name && styles.inputError]}
-              placeholder="ex - Paneer Tikka Masala" // <--- Updated Placeholder
-              placeholderTextColor="#94A3B8"
+              placeholder="ex - Paneer Tikka Masala"
+              placeholderTextColor={COLORS.gray}
               value={name}
               onChangeText={setName}
             />
 
             <View style={styles.row}>
-              <View style={{ flex: 1.5 }}>
+              <View style={styles.priceContainer}>
                 <Text style={styles.inputLabel}>PRICE (₹)</Text>
                 <TextInput 
                   style={[styles.input, errors.price && styles.inputError]}
-                  placeholder="ex - 120" // <--- Updated Placeholder
-                  placeholderTextColor="#94A3B8"
+                  placeholder="ex - 120"
+                  placeholderTextColor={COLORS.gray}
                   keyboardType="numeric"
                   value={price}
                   onChangeText={setPrice}
                 />
               </View>
-              <View style={{ flex: 1 }}>
+              <View style={styles.typeContainer}>
                 <Text style={styles.inputLabel}>TYPE</Text>
                 <TouchableOpacity 
                   onPress={() => setIsVeg(!isVeg)}
@@ -226,12 +226,11 @@ export default function AddDishScreen() {
             </View>
           </View>
 
-          {/* DESCRIPTION SECTION */}
           <View style={styles.card}>
             <View style={styles.aiHeader}>
               <Text style={styles.sectionTitle}>DESCRIPTION</Text>
               <TouchableOpacity onPress={handleAIGenerate} style={styles.aiBtn}>
-                <Ionicons name="sparkles" size={12} color="white" />
+                <Ionicons name="sparkles" size={12} color={COLORS.white} />
                 <Text style={styles.aiBtnText}>{isGenerating ? 'Drafting...' : 'Magic Write'}</Text>
               </TouchableOpacity>
             </View>
@@ -239,8 +238,8 @@ export default function AddDishScreen() {
               <TextInput 
                 style={styles.textArea}
                 multiline
-                placeholder="ex - Spicy paneer cubes grilled with veggies..." // <--- Updated Placeholder
-                placeholderTextColor="#94A3B8"
+                placeholder="ex - Spicy paneer cubes grilled with veggies..."
+                placeholderTextColor={COLORS.gray}
                 value={description}
                 onChangeText={setDescription}
               />
@@ -252,7 +251,7 @@ export default function AddDishScreen() {
           </View>
 
           <TouchableOpacity onPress={handleSubmit} disabled={uploading} style={styles.submitBtn}>
-            {uploading ? <ActivityIndicator color="white" /> : <Text style={styles.submitText}>Add to Menu</Text>}
+            {uploading ? <ActivityIndicator color={COLORS.white} /> : <Text style={styles.submitText}>Add to Menu</Text>}
           </TouchableOpacity>
 
         </ScrollView>
@@ -262,33 +261,196 @@ export default function AddDishScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
-  iconBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: COLORS.border },
-  navTitle: { fontSize: 18, fontWeight: '800' },
-  scroll: { padding: 20, paddingBottom: 40 },
-  card: { backgroundColor: 'white', borderRadius: 24, padding: 20, marginBottom: 16, elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10 },
-  sectionTitle: { fontSize: 10, fontWeight: '800', color: COLORS.gray, letterSpacing: 1, marginBottom: 15 },
-  imagePicker: { height: 160, borderRadius: 20, overflow: 'hidden' },
-  placeholderGradient: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  placeholderText: { marginTop: 8, fontSize: 12, fontWeight: '700', color: COLORS.gray },
-  fullImg: { width: '100%', height: '100%' },
-  floatingBtn: { position: 'absolute', bottom: 10, right: 10, width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.obsidian, justifyContent: 'center', alignItems: 'center' },
-  inputLabel: { fontSize: 10, fontWeight: '700', color: COLORS.grayDark, marginBottom: 6 },
-  input: { backgroundColor: '#F8FAFC', borderColor: COLORS.border, borderRadius: 12, padding: 12, fontSize: 15, fontWeight: '600', marginBottom: 12, borderWidth: 1 },
-  inputError: { borderColor: COLORS.error },
-  row: { flexDirection: 'row', gap: 12 },
-  typeToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 12, borderWidth: 1.5, gap: 6 },
-  dot: { width: 6, height: 6, borderRadius: 3 },
-  typeText: { fontSize: 12, fontWeight: '800' },
-  aiHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  aiBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.aiPrimary, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, gap: 4 },
-  aiBtnText: { color: 'white', fontSize: 11, fontWeight: '700' },
-  aiContainer: { borderRadius: 16, backgroundColor: '#FAF9FF', borderWidth: 2 },
-  textArea: { padding: 12, fontSize: 14, minHeight: 80, textAlignVertical: 'top', color: '#0F172A' },
-  aiFooter: { flexDirection: 'row', alignItems: 'center', padding: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9', gap: 4 },
-  aiFooterText: { fontSize: 9, fontWeight: '700', color: COLORS.gray },
-  submitBtn: { backgroundColor: COLORS.obsidian, height: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginTop: 20 },
-  submitText: { color: 'white', fontSize: 16, fontWeight: '800' },
-  errorText: { color: COLORS.error, fontSize: 11, marginTop: 5 }
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  nav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+  },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  navTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  spacer: {
+    width: 40,
+  },
+  scroll: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  card: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 16,
+    elevation: 2,
+    shadowColor: COLORS.shadow,
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+  },
+  sectionTitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.gray,
+    letterSpacing: 1,
+    marginBottom: 15,
+  },
+  imagePicker: {
+    height: 160,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  placeholderGradient: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  placeholderText: {
+    marginTop: 8,
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.gray,
+  },
+  fullImg: {
+    width: '100%',
+    height: '100%',
+  },
+  floatingBtn: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.obsidian,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  inputLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.grayDark,
+    marginBottom: 6,
+  },
+  input: {
+    backgroundColor: COLORS.background,
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 12,
+    borderWidth: 1,
+  },
+  inputError: {
+    borderColor: COLORS.error,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  priceContainer: {
+    flex: 1.5,
+  },
+  typeContainer: {
+    flex: 1,
+  },
+  typeToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    gap: 6,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  typeText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  aiHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  aiBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.aiPrimary,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 4,
+  },
+  aiBtnText: {
+    color: COLORS.white,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  aiContainer: {
+    borderRadius: 16,
+    backgroundColor: COLORS.aiBackground,
+    borderWidth: 2,
+  },
+  textArea: {
+    padding: 12,
+    fontSize: 14,
+    minHeight: 80,
+    textAlignVertical: 'top',
+    color: COLORS.text,
+  },
+  aiFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.aiFooterBorder,
+    gap: 4,
+  },
+  aiFooterText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: COLORS.gray,
+  },
+  submitBtn: {
+    backgroundColor: COLORS.obsidian,
+    height: 56,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  submitText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  errorText: {
+    color: COLORS.error,
+    fontSize: 11,
+    marginTop: 5,
+  },
 });

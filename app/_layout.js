@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
+
 import { Stack } from 'expo-router';
+
 import AnimatedSplash from '../components/AnimatedSplash';
 
 /**

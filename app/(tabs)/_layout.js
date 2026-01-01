@@ -1,9 +1,9 @@
 import React from 'react';
-import { View, Platform, StyleSheet } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
+
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-// Theme Constants
 const COLORS = {
   primary: '#7E22CE',
   obsidian: '#111827',
@@ -12,7 +12,7 @@ const COLORS = {
   shadow: '#000000',
 };
 
-// Platform specific dimensions
+// Platform specific dimensions to ensure consistent look
 const LAYOUT = {
   tabBarHeight: Platform.OS === 'ios' ? 85 : 65,
   paddingBottom: Platform.OS === 'ios' ? 25 : 10,
@@ -20,20 +20,13 @@ const LAYOUT = {
 
 /**
  * Helper component to render tab icons
- * @param {object} props
- * @param {boolean} props.focused - Whether the tab is active
- * @param {string} props.color - The tint color
- * @param {string} props.iconName - The base name of the icon (without -outline)
+ * automatically switches between filled and outline versions.
  */
 const TabBarIcon = ({ focused, color, iconName }) => {
   const name = focused ? iconName : `${iconName}-outline`;
   return <Ionicons name={name} size={24} color={color} />;
 };
 
-/**
- * TabLayout
- * Main navigation wrapper for the application.
- */
 export default function TabLayout() {
   return (
     <Tabs
@@ -85,9 +78,9 @@ const styles = StyleSheet.create({
     height: LAYOUT.tabBarHeight,
     paddingBottom: LAYOUT.paddingBottom,
     paddingTop: 10,
-    // Android Shadow
+    
+    // Shadow Styling
     elevation: 10,
-    // iOS Shadow
     shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.05,

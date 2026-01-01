@@ -12,17 +12,14 @@ import {
   Animated,
   Image,
   StyleSheet,
-  Platform,
   Dimensions,
   ScrollView
 } from 'react-native';
 
-// Third-party Imports
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-// Local Imports
 import { supabase } from '../../lib/supabase';
 import { useCart } from '../../lib/store';
 import { getCurrentLocation } from '../../lib/location';
@@ -30,11 +27,10 @@ import DishCard from '../../components/DishCard';
 
 const { width } = Dimensions.get('window');
 
-// 🎨 Premium Theme Palette (From Code 2)
 const COLORS = {
   background: '#F9FAFB',
   surface: '#FFFFFF',
-  obsidian: '#0F172A', // Obsidian
+  obsidian: '#0F172A',
   primary: '#7E22CE',
   secondary: '#F3F4F6',
   gray: '#6B7280',
@@ -43,6 +39,20 @@ const COLORS = {
   red: '#EF4444',
   cartShadow: '#000',
   primaryLight: '#F3E8FF',
+  promoBg1: '#FFF7ED',
+  promoBorder1: '#FFEDD5',
+  promoText1: '#C2410C',
+  promoSub1: '#9A3412',
+  promoCodeBg: 'rgba(255,255,255,0.6)',
+  promoBg2: '#EEF2FF',
+  promoBorder2: '#E0E7FF',
+  promoText2: '#3730A3',
+  promoSub2: '#312E81',
+  promoBtnBg: '#4338CA',
+  badgeActive: 'rgba(255,255,255,0.2)',
+  locationIconBg: '#F3F4F6',
+  searchIcon: '#0F172A',
+  viewCartText: 'rgba(255,255,255,0.6)',
 };
 
 // --- HELPER FUNCTIONS ---
@@ -55,7 +65,7 @@ const isVeg = (item) => {
 
 // --- COMPONENTS ---
 
-// 1. Promotional Banners (From Code 2)
+// 1. Promotional Banners
 const PromotionalBanner = () => (
   <ScrollView 
     horizontal 
@@ -64,12 +74,12 @@ const PromotionalBanner = () => (
     contentContainerStyle={styles.promoContentContainer}
   >
     {/* Offer 1 */}
-    <View style={[styles.promoCard, { backgroundColor: '#FFF7ED', borderColor: '#FFEDD5' }]}>
+    <View style={[styles.promoCard, { backgroundColor: COLORS.promoBg1, borderColor: COLORS.promoBorder1 }]}>
       <View style={styles.promoContent}>
-        <Text style={[styles.promoTitle, { color: '#C2410C' }]}>50% OFF</Text>
-        <Text style={[styles.promoSubtitle, { color: '#9A3412' }]}>First 3 Orders</Text>
-        <View style={{backgroundColor: 'rgba(255,255,255,0.6)', paddingHorizontal:6, paddingVertical:2, borderRadius:4, alignSelf:'flex-start'}}>
-           <Text style={[styles.promoCode, { color: '#9A3412' }]}>TIFFIN50</Text>
+        <Text style={[styles.promoTitle, { color: COLORS.promoText1 }]}>50% OFF</Text>
+        <Text style={[styles.promoSubtitle, { color: COLORS.promoSub1 }]}>First 3 Orders</Text>
+        <View style={styles.promoCodeContainer}>
+           <Text style={[styles.promoCode, { color: COLORS.promoSub1 }]}>TIFFIN50</Text>
         </View>
       </View>
       <Image 
@@ -79,13 +89,12 @@ const PromotionalBanner = () => (
     </View>
 
     {/* Offer 2 */}
-    <View style={[styles.promoCard, { backgroundColor: '#EEF2FF', borderColor: '#E0E7FF', marginLeft: 12 }]}>
+    <View style={[styles.promoCard, { backgroundColor: COLORS.promoBg2, borderColor: COLORS.promoBorder2, marginLeft: 12 }]}>
       <View style={styles.promoContent}>
-        <Text style={[styles.promoTitle, { color: '#3730A3' }]}>Free Delivery</Text>
-        {/* Fixed JSX syntax for greater than symbol */}
-        <Text style={[styles.promoSubtitle, { color: '#312E81' }]}>Orders {'>'} ₹150</Text>
-        <TouchableOpacity style={{backgroundColor: '#4338CA', paddingHorizontal:10, paddingVertical:4, borderRadius:6, alignSelf:'flex-start'}}>
-           <Text style={{color:'white', fontSize:10, fontWeight:'700'}}>Order Now</Text>
+        <Text style={[styles.promoTitle, { color: COLORS.promoText2 }]}>Free Delivery</Text>
+        <Text style={[styles.promoSubtitle, { color: COLORS.promoSub2 }]}>Orders {'>'} ₹150</Text>
+        <TouchableOpacity style={styles.promoBtn}>
+           <Text style={styles.promoBtnText}>Order Now</Text>
         </TouchableOpacity>
       </View>
       <Image 
@@ -96,7 +105,7 @@ const PromotionalBanner = () => (
   </ScrollView>
 );
 
-// 2. Filter Chips (From Code 2)
+// 2. Filter Chips
 const FilterChip = ({ label, icon, isActive, onPress, count }) => (
   <TouchableOpacity
     onPress={onPress}
@@ -110,7 +119,7 @@ const FilterChip = ({ label, icon, isActive, onPress, count }) => (
       <Ionicons
         name={icon}
         size={16}
-        color={isActive ? 'white' : COLORS.gray}
+        color={isActive ? COLORS.surface : COLORS.gray}
         style={styles.filterIcon}
       />
     )}
@@ -125,7 +134,7 @@ const FilterChip = ({ label, icon, isActive, onPress, count }) => (
   </TouchableOpacity>
 );
 
-// 3. Home Header (From Code 2)
+// 3. Home Header
 const HomeHeader = ({
   insets,
   locationStatus,
@@ -199,7 +208,7 @@ const HomeHeader = ({
         <Text style={styles.sectionTitle}>Eat what makes you happy</Text>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={{ paddingHorizontal: 20 }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterScrollContent}>
         <FilterChip
           label="All"
           isActive={category === 'All'}
@@ -227,7 +236,7 @@ const HomeHeader = ({
   </View>
 );
 
-// 4. FLOATING CART (From Code 1 - Logic & Position)
+// 4. FLOATING CART
 const FloatingCart = ({ cart, total, count, slideUpAnim, insets, onPress }) => {
   const cartImages = [...new Set(cart.map(item => item.image_url))].slice(0, 3);
 
@@ -236,7 +245,6 @@ const FloatingCart = ({ cart, total, count, slideUpAnim, insets, onPress }) => {
       style={[
         styles.floatingCartContainer,
         {
-          // ✅ Position Exactly from Code 1
           bottom: insets.bottom > 0 ? insets.bottom : 20,
           transform: [{ translateY: slideUpAnim }]
         }
@@ -272,13 +280,12 @@ const FloatingCart = ({ cart, total, count, slideUpAnim, insets, onPress }) => {
           <View style={styles.cartTotalContainer}>
             <Text style={styles.cartTotalText}>₹{total}</Text>
           </View>
-          <Ionicons name="arrow-forward-circle" size={28} color="white" />
+          <Ionicons name="arrow-forward-circle" size={28} color={COLORS.surface} />
         </View>
       </TouchableOpacity>
     </Animated.View>
   );
 };
-
 
 // --- MAIN SCREEN ---
 export default function HomeScreen() {
@@ -287,7 +294,6 @@ export default function HomeScreen() {
   const scrollY = useRef(new Animated.Value(0)).current;
   const slideUpAnim = useRef(new Animated.Value(100)).current;
 
-  // State
   const [menuItems, setMenuItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -295,14 +301,12 @@ export default function HomeScreen() {
   const [userPosition, setUserPosition] = useState(null);
   const [locationStatus, setLocationStatus] = useState('Locating...');
 
-  // Store
   const { cart, getCartTotal, signOut, setUserLocation } = useCart();
 
   useEffect(() => {
     initializeData();
   }, []);
 
-  // Cart Animation
   useEffect(() => {
     if (cart.length > 0) {
       Animated.spring(slideUpAnim, {
@@ -389,7 +393,7 @@ export default function HomeScreen() {
       {loading ? (
         <View style={styles.loaderContainer}>
           <ActivityIndicator size="large" color={COLORS.obsidian} />
-          <Text style={{marginTop: 10, color: COLORS.gray, fontWeight: '500'}}>Setting up the kitchen...</Text>
+          <Text style={styles.loaderText}>Setting up the kitchen...</Text>
         </View>
       ) : (
         <FlatList
@@ -450,6 +454,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: COLORS.background,
   },
+  loaderText: {
+    marginTop: 10,
+    color: COLORS.gray,
+    fontWeight: '500',
+  },
   cardWrapper: {
     paddingHorizontal: 16,
     marginBottom: 16,
@@ -459,18 +468,20 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.border,
     marginHorizontal: 20,
     marginBottom: 20,
-    marginTop: 10
+    marginTop: 10,
   },
   
-  // --- HEADER STYLES (From Code 2) ---
-  headerWrapper: { backgroundColor: COLORS.background },
+  // --- HEADER STYLES ---
+  headerWrapper: {
+    backgroundColor: COLORS.background,
+  },
   headerContainer: {
     backgroundColor: COLORS.surface,
     paddingBottom: 24,
     paddingHorizontal: 20,
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
-    shadowColor: '#000',
+    shadowColor: COLORS.cartShadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
     shadowRadius: 10,
@@ -483,68 +494,230 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
-  locationContainer: { flexDirection: 'row', alignItems: 'center' },
+  locationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   locationIconBg: {
-    width: 36, height: 36, borderRadius: 12, backgroundColor: COLORS.secondary,
-    justifyContent: 'center', alignItems: 'center', marginRight: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: COLORS.locationIconBg,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
   },
-  locationLabel: { fontSize: 10, color: COLORS.gray, fontWeight: '700', letterSpacing: 0.5 },
-  locationSelector: { flexDirection: 'row', alignItems: 'center' },
-  locationTitle: { fontSize: 14, fontWeight: '800', color: COLORS.obsidian },
-  profileButton: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
-  profileImage: { width: 38, height: 38, borderRadius: 19, borderWidth: 2, borderColor: COLORS.surface },
-
-  heroTextContainer: { marginBottom: 20 },
-  heroGreeting: { fontSize: 16, color: COLORS.gray, fontWeight: '600', marginBottom: 2 },
-  heroQuestion: { fontSize: 24, fontWeight: '900', color: COLORS.obsidian },
-
+  locationLabel: {
+    fontSize: 10,
+    color: COLORS.gray,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  locationSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  locationTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.obsidian,
+  },
+  profileButton: {
+    shadowColor: COLORS.cartShadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  profileImage: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 2,
+    borderColor: COLORS.surface,
+  },
+  heroTextContainer: {
+    marginBottom: 20,
+  },
+  heroGreeting: {
+    fontSize: 16,
+    color: COLORS.gray,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  heroQuestion: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: COLORS.obsidian,
+  },
   searchFloatingContainer: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface,
-    borderRadius: 16, paddingHorizontal: 16, height: 52,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3,
-    borderWidth: 1, borderColor: COLORS.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    height: 52,
+    shadowColor: COLORS.cartShadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
-  searchIcon: { marginRight: 10 },
-  searchInput: { flex: 1, fontSize: 14, fontWeight: '600', color: COLORS.obsidian, height: '100%' },
-  micButton: { paddingLeft: 8, borderLeftWidth: 1, borderLeftColor: COLORS.border },
+  searchIcon: {
+    marginRight: 10,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.obsidian,
+    height: '100%',
+  },
+  micButton: {
+    paddingLeft: 8,
+    borderLeftWidth: 1,
+    borderLeftColor: COLORS.border,
+  },
 
-  // --- CONTENT STYLES (From Code 2) ---
-  bodyContentContainer: { marginTop: 16 },
-  
-  promoScrollView: { marginBottom: 24 },
-  promoContentContainer: { paddingHorizontal: 20 },
+  // --- CONTENT STYLES ---
+  bodyContentContainer: {
+    marginTop: 16,
+  },
+  promoScrollView: {
+    marginBottom: 24,
+  },
+  promoContentContainer: {
+    paddingHorizontal: 20,
+  },
   promoCard: {
-    width: width * 0.72, height: 130, borderRadius: 20, padding: 16,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1
+    width: width * 0.72,
+    height: 130,
+    borderRadius: 20,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
   },
-  promoContent: { flex: 1 },
-  promoTitle: { fontSize: 20, fontWeight: '900', marginBottom: 2 },
-  promoSubtitle: { fontSize: 12, fontWeight: '600', marginBottom: 10 },
-  promoCode: { fontSize: 10, fontWeight: '800' },
-  promoImage: { width: 70, height: 70, resizeMode: 'contain' },
-
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12 },
-  sectionTitle: { fontSize: 18, fontWeight: '800', color: COLORS.obsidian },
-  
-  filterScroll: { marginBottom: 10 },
+  promoContent: {
+    flex: 1,
+  },
+  promoTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    marginBottom: 2,
+  },
+  promoSubtitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 10,
+  },
+  promoCodeContainer: {
+    backgroundColor: COLORS.promoCodeBg,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+  },
+  promoCode: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  promoBtn: {
+    backgroundColor: COLORS.promoBtnBg,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  promoBtnText: {
+    color: COLORS.surface,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  promoImage: {
+    width: 70,
+    height: 70,
+    resizeMode: 'contain',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.obsidian,
+  },
+  filterScroll: {
+    marginBottom: 10,
+  },
+  filterScrollContent: {
+    paddingHorizontal: 20,
+  },
   filterChip: {
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, flexDirection: 'row',
-    alignItems: 'center', marginRight: 10, backgroundColor: COLORS.surface,
-    borderWidth: 1, borderColor: COLORS.border,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 10,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
-  filterChipActive: { backgroundColor: COLORS.obsidian, borderColor: COLORS.obsidian },
+  filterChipActive: {
+    backgroundColor: COLORS.obsidian,
+    borderColor: COLORS.obsidian,
+  },
   filterChipInactive: {},
-  filterIcon: { marginRight: 6 },
-  filterText: { fontSize: 13, fontWeight: '600', color: COLORS.gray },
-  filterTextActive: { color: 'white', fontWeight: '700' },
-  countBadgeActive: { backgroundColor: 'rgba(255,255,255,0.2)', width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', marginLeft: 6 },
-  countTextActive: { color: 'white', fontSize: 9, fontWeight: '800' },
+  filterIcon: {
+    marginRight: 6,
+  },
+  filterText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.gray,
+  },
+  filterTextActive: {
+    color: COLORS.surface,
+    fontWeight: '700',
+  },
+  countBadgeActive: {
+    backgroundColor: COLORS.badgeActive,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 6,
+  },
+  countTextActive: {
+    color: COLORS.surface,
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  emptyStateContainer: {
+    alignItems: 'center',
+    marginTop: 40,
+  },
+  emptyStateTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.obsidian,
+    marginTop: 10,
+  },
+  emptyStateText: {
+    marginTop: 4,
+    fontSize: 14,
+    color: COLORS.gray,
+  },
 
-  emptyStateContainer: { alignItems: 'center', marginTop: 40 },
-  emptyStateTitle: { fontSize: 18, fontWeight: '700', color: COLORS.obsidian, marginTop: 10 },
-  emptyStateText: { marginTop: 4, fontSize: 14, color: COLORS.gray },
-
-  // --- FLOATING CART STYLES (From Code 1) ---
+  // --- FLOATING CART STYLES ---
   floatingCartContainer: {
     position: 'absolute',
     left: 16,
@@ -581,12 +754,12 @@ const styles = StyleSheet.create({
     borderColor: COLORS.obsidian,
   },
   cartCountText: {
-    color: 'white',
+    color: COLORS.surface,
     fontWeight: '800',
     fontSize: 16,
   },
   viewCartText: {
-    color: 'rgba(255,255,255,0.6)',
+    color: COLORS.viewCartText,
     fontSize: 11,
     fontWeight: '600',
   },
@@ -599,7 +772,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   cartTotalText: {
-    color: 'white',
+    color: COLORS.surface,
     fontSize: 18,
     fontWeight: '800',
   },
