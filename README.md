@@ -5,60 +5,48 @@
 <h1 align="center">🍱 TiffinTales</h1>
 
 <p align="center">
-  A hyperlocal tiffin & grocery delivery ecosystem connecting home chefs with busy professionals.
+  A high-performance, multi-sided marketplace connecting local home chefs with urban professionals.
 </p>
 
 <p align="center">
   <a href="https://drive.google.com/file/d/1PSu0GwwNXMmHxcADTxF7kFhHuUYcI4G4/view?usp=sharing">
-    📲 Download APK
+    <b>📲 Download Production APK</b>
   </a>
 </p>
 
 ---
 
-## 🚀 Elevator Pitch
+## 🚀 Executive Summary
 
-**TiffinTales** is a multi-role food delivery platform designed for local tiffin providers and urban professionals who want reliable, affordable, home-style meals.  
-It enables seamless ordering and real-time tracking through a scalable mobile-first architecture.
-
----
-
-## ✨ Key Features
-
-- 📦 **Real-time Order Tracking**  
-  Live order updates powered by Supabase Realtime subscriptions.
-
-- 🔐 **Role-Based Authentication**  
-  Separate flows for **Customers**, **Chefs**, and **Delivery Riders** with protected routes.
-
-- 📱 **Offline-First Experience**  
-  Local caching using AsyncStorage for network-resilient usage.
-
-- 🧩 **Custom UI Components**  
-  Buttons, modals, carousels, inputs, and loaders built from scratch (no UI kits).
-
-- 🗺️ **Permissions & Device APIs**  
-  Location, camera, and storage permissions integrated cleanly.
-
-- ⚡ **Performance Optimized**  
-  Memoization, reduced re-renders, and smooth 60fps animations.
+**TiffinTales** is a hyperlocal food delivery ecosystem engineered for scale. Building a delivery platform requires handling complex, asynchronous state across multiple actors. TiffinTales solves this by providing a unified, real-time infrastructure that seamlessly orchestrates separate flows for **Customers**, **Kitchens**, and **Delivery Fleet Partners**.
 
 ---
 
-## 🏗️ Architecture Overview
+## 🧠 Core Engineering Achievements
+
+* ⚡ **Multi-Sided Realtime Infrastructure:** Leveraged Supabase WebSockets to implement sub-second, multi-way order synchronization. When a chef updates an order status, the customer and assigned rider UIs update instantly without polling.
+* 🛡️ **Zero-Dependency Design System:** Bypassed heavy, off-the-shelf UI kits (like NativeBase or UI Kitten). Designed and engineered a proprietary component library from scratch to ensure strict memory management and sustained 60fps animations.
+* 📡 **Network-Resilient UX:** Engineered an offline-first caching layer using `AsyncStorage`. The application degrades gracefully in low-connectivity zones, allowing users to browse cached menus without network timeouts.
+* 🗺️ **Native Device Orchestration:** Built secure, lifecycle-aware integrations for native device APIs, including precise geolocation tracking, camera access, and local file storage.
+* 🔐 **Granular RBAC (Role-Based Access Control):** Implemented strict routing and authentication barriers at the database level to ensure data isolation between the three distinct user roles.
+
+---
+
+## 🏗️ Systems Architecture
 
 ```text
 ┌──────────────────────┐        ┌──────────────────────┐
 │  React Native App    │        │   Admin Web Panel    │
 │  (Users / Chefs /    │        │     (Next.js)        │
-│   Riders)            │        └──────────┬───────────┘
-└──────────┬───────────┘                   │
-           │                                │
-           └───────────────┬────────────────┘
+│   Riders)            │        │                      │
+└──────────┬───────────┘        └──────────┬───────────┘
+           │                               │
+           └───────────────┬───────────────┘
                            │
                    ┌───────▼────────┐
-                   │    Supabase     │
-                   │ Auth • DB       │
-                   │ Realtime        │
-                   │ Storage         │
+                   │   Supabase     │
+                   │ ◦ Auth & RLS   │
+                   │ ◦ PostgreSQL   │
+                   │ ◦ Realtime WS  │
+                   │ ◦ Edge Storage │
                    └────────────────┘
