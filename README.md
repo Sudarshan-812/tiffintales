@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/your-username/your-repo/main/assets/banner.png" alt="TiffinTales Banner" />
+  
 </p>
 
 <h1 align="center">🍱 TiffinTales</h1>
