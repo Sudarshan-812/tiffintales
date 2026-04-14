@@ -1,72 +1,44 @@
 import React, { useState, useCallback, useRef } from 'react';
 import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  Image,
-  StyleSheet,
-  Alert,
-  ActivityIndicator,
-  RefreshControl,
-  Animated,
-  TouchableWithoutFeedback
+  View, Text, FlatList, TouchableOpacity, Image,
+  StyleSheet, Alert, ActivityIndicator, RefreshControl,
+  Animated, TouchableWithoutFeedback,
 } from 'react-native';
-
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
+import { StatusBar } from 'expo-status-bar';
 import { supabase } from '../../lib/supabase';
+import { COLORS, SHADOW, RADIUS } from '../../lib/theme';
 
-const COLORS = {
-  background: '#FDFBF7',
-  surface: '#FFFFFF',
-  obsidian: '#0F172A',
-  gray: '#94A3B8',
-  grayDark: '#64748B',
-  border: '#E2E8F0',
-  error: '#EF4444',
-  success: '#10B981',
-  primary: '#7E22CE',
-  vegBadgeBg: '#ECFDF5',
-  nonVegBadgeBg: '#FEF2F2',
-  placeholder: '#F1F5F9',
-  overlay: 'rgba(255, 255, 255, 0.95)',
-  fabShadow: '#7E22CE', // Primary color for shadow
-  menuItemBg1: '#F3E8FF',
-  menuItemBg2: '#F1F5F9',
-};
+// ─── Menu Item Card ───────────────────────────────────────────────────────────
 
-/**
- * MenuItemCard
- * Renders individual dish details and handles delete interactions.
- */
 const MenuItemCard = ({ item, onDelete }) => {
-  // Logic: Treat null or undefined as Veg; only strict false is Non-Veg
   const isVeg = item.is_veg !== false;
 
   return (
     <View style={styles.card}>
       <Image
-        source={{ uri: item.image_url || 'https://via.placeholder.com/150' }}
-        style={styles.image}
+        source={{ uri: item.image_url || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200' }}
+        style={styles.cardImg}
       />
-      <View style={styles.content}>
-        <View style={styles.row}>
-          <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
+      <View style={styles.cardBody}>
+        <View style={styles.cardTop}>
+          <Text style={styles.cardName} numberOfLines={1}>{item.name}</Text>
           <TouchableOpacity onPress={() => onDelete(item.id, item.name)} style={styles.deleteBtn}>
-            <Ionicons name="trash-outline" size={18} color={COLORS.error} />
+            <Ionicons name="trash-outline" size={17} color={COLORS.error} />
           </TouchableOpacity>
         </View>
-        <Text style={styles.desc} numberOfLines={2}>
+
+        <Text style={styles.cardDesc} numberOfLines={2}>
           {item.description || 'No description provided.'}
         </Text>
-        <View style={styles.footer}>
-          <Text style={styles.price}>₹{item.price}</Text>
-          <View style={[styles.badge, { backgroundColor: isVeg ? COLORS.vegBadgeBg : COLORS.nonVegBadgeBg }]}>
-            <View style={[styles.dot, { backgroundColor: isVeg ? COLORS.success : COLORS.error }]} />
-            <Text style={[styles.badgeText, { color: isVeg ? COLORS.success : COLORS.error }]}>
+
+        <View style={styles.cardFooter}>
+          <Text style={styles.cardPrice}>₹{item.price}</Text>
+          <View style={[styles.vegBadge, { backgroundColor: isVeg ? COLORS.successLight : COLORS.errorLight }]}>
+            <View style={[styles.vegDot, { backgroundColor: isVeg ? COLORS.success : COLORS.error }]} />
+            <Text style={[styles.vegText, { color: isVeg ? COLORS.success : COLORS.error }]}>
               {isVeg ? 'VEG' : 'NON-VEG'}
             </Text>
           </View>
@@ -76,41 +48,31 @@ const MenuItemCard = ({ item, onDelete }) => {
   );
 };
 
+// ─── Screen ───────────────────────────────────────────────────────────────────
+
 export default function ChefMenuScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  const [menuItems, setMenuItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [menuItems,  setMenuItems]  = useState([]);
+  const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [fabOpen,    setFabOpen]    = useState(false);
 
-  const [menuOpen, setMenuOpen] = useState(false);
-  const animation = useRef(new Animated.Value(0)).current;
+  const fabAnim = useRef(new Animated.Value(0)).current;
 
-  // Initial Data Load
-  useFocusEffect(
-    useCallback(() => {
-      fetchMenu();
-    }, [])
-  );
+  useFocusEffect(useCallback(() => { fetchMenu(); }, []));
 
-  /**
-   * Fetches menu items for the current authenticated chef.
-   */
   const fetchMenu = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-
       const { data, error } = await supabase
-        .from('menu_items')
-        .select('*')
-        .eq('chef_id', user.id)
+        .from('menu_items').select('*').eq('chef_id', user.id)
         .order('created_at', { ascending: false });
-
       if (error) throw error;
       setMenuItems(data || []);
-    } catch (error) {
+    } catch {
       Alert.alert('Error', 'Could not load menu.');
     } finally {
       setLoading(false);
@@ -118,75 +80,49 @@ export default function ChefMenuScreen() {
     }
   };
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchMenu();
-  };
-
-  /**
-   * Handles deletion confirmation and database removal.
-   */
   const handleDelete = (id, name) => {
-    Alert.alert(
-      'Delete Dish',
-      `Are you sure you want to remove "${name}" from your menu?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            const { error } = await supabase.from('menu_items').delete().eq('id', id);
-            if (error) Alert.alert('Error', error.message);
-            else fetchMenu();
-          }
-        }
-      ]
-    );
+    Alert.alert('Delete Dish', `Remove "${name}" from your menu?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive',
+        onPress: async () => {
+          const { error } = await supabase.from('menu_items').delete().eq('id', id);
+          if (error) Alert.alert('Error', error.message);
+          else fetchMenu();
+        },
+      },
+    ]);
   };
 
-  /**
-   * Toggles the Floating Action Button (FAB) state with spring animation.
-   */
-  const toggleMenu = () => {
-    const toValue = menuOpen ? 0 : 1;
-    Animated.spring(animation, {
-      toValue,
+  const toggleFab = () => {
+    Animated.spring(fabAnim, {
+      toValue: fabOpen ? 0 : 1,
       friction: 6,
       useNativeDriver: true,
     }).start();
-    setMenuOpen(!menuOpen);
+    setFabOpen(!fabOpen);
   };
 
-  // FAB Interpolations
-  const rotation = {
-    transform: [
-      {
-        rotate: animation.interpolate({
-          inputRange: [0, 1],
-          outputRange: ['0deg', '45deg'],
-        }),
-      },
-    ],
-  };
-
-  const opacity = animation.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: [0, 0, 1],
-  });
+  const fabRotate  = fabAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '45deg'] });
+  const menuOpacity = fabAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 0, 1] });
+  const menuScale   = fabAnim.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] });
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.screen, { paddingTop: insets.top }]}>
+      <StatusBar style="dark" />
 
-      {/* HEADER */}
+      {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>My Kitchen Menu 📜</Text>
-          <Text style={styles.subtitle}>{menuItems.length} dishes active</Text>
+          <Text style={styles.headerTag}>MY KITCHEN</Text>
+          <Text style={styles.headerTitle}>Menu</Text>
+        </View>
+        <View style={styles.countBadge}>
+          <Text style={styles.countText}>{menuItems.length}</Text>
         </View>
       </View>
 
-      {/* LIST CONTENT */}
+      {/* List */}
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={COLORS.primary} />
@@ -196,57 +132,62 @@ export default function ChefMenuScreen() {
           data={menuItems}
           keyExtractor={i => i.id.toString()}
           renderItem={({ item }) => <MenuItemCard item={item} onDelete={handleDelete} />}
-          contentContainerStyle={styles.listContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          contentContainerStyle={styles.list}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => { setRefreshing(true); fetchMenu(); }}
+              tintColor={COLORS.primary}
+              colors={[COLORS.primary]}
+            />
+          }
+          showsVerticalScrollIndicator={false}
           ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <View style={styles.emptyIconBg}>
-                <Ionicons name="fast-food-outline" size={48} color={COLORS.gray} />
-              </View>
+            <View style={styles.empty}>
+              <Text style={styles.emptyEmoji}>🍳</Text>
               <Text style={styles.emptyTitle}>Your Menu is Empty</Text>
-              <Text style={styles.emptyText}>Tap the + button to add your first delicious dish!</Text>
+              <Text style={styles.emptySub}>Tap + below to add your first dish!</Text>
             </View>
           }
         />
       )}
 
-      {/* 🪄 FAB & OVERLAY */}
-      {menuOpen && (
-        <TouchableWithoutFeedback onPress={toggleMenu}>
+      {/* Overlay */}
+      {fabOpen && (
+        <TouchableWithoutFeedback onPress={toggleFab}>
           <View style={styles.overlay} />
         </TouchableWithoutFeedback>
       )}
 
-      <View style={styles.fabContainer}>
-        {/* Animated Menu Options */}
-        <Animated.View style={[styles.menuItemsContainer, { opacity, transform: [{ scale: animation }] }]}>
+      {/* FAB */}
+      <View style={styles.fabWrap}>
+        <Animated.View style={[styles.fabMenu, { opacity: menuOpacity, transform: [{ scale: menuScale }] }]}>
 
           <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => { toggleMenu(); router.push('/(chef)/add'); }}
+            style={styles.fabMenuItem}
+            onPress={() => { toggleFab(); router.push('/(chef)/add'); }}
           >
-            <View style={[styles.menuIconBg, { backgroundColor: COLORS.menuItemBg1 }]}>
-              <Ionicons name="sparkles" size={20} color={COLORS.primary} />
+            <View style={[styles.fabMenuIcon, { backgroundColor: COLORS.primaryFaint }]}>
+              <Ionicons name="sparkles" size={18} color={COLORS.primary} />
             </View>
-            <Text style={styles.menuLabel}>AI Quick Add</Text>
+            <Text style={styles.fabMenuLabel}>AI Quick Add</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => { toggleMenu(); router.push('/(chef)/add'); }}
+            style={styles.fabMenuItem}
+            onPress={() => { toggleFab(); router.push('/(chef)/add'); }}
           >
-            <View style={[styles.menuIconBg, { backgroundColor: COLORS.menuItemBg2 }]}>
-              <Ionicons name="create" size={20} color={COLORS.obsidian} />
+            <View style={[styles.fabMenuIcon, { backgroundColor: COLORS.border }]}>
+              <Ionicons name="create" size={18} color={COLORS.dark} />
             </View>
-            <Text style={styles.menuLabel}>Manual Entry</Text>
+            <Text style={styles.fabMenuLabel}>Manual Entry</Text>
           </TouchableOpacity>
 
         </Animated.View>
 
-        {/* Main Toggle Button */}
-        <TouchableWithoutFeedback onPress={toggleMenu}>
-          <Animated.View style={[styles.fab, rotation]}>
-            <Ionicons name="add" size={32} color={COLORS.surface} />
+        <TouchableWithoutFeedback onPress={toggleFab}>
+          <Animated.View style={[styles.fab, { transform: [{ rotate: fabRotate }] }]}>
+            <Ionicons name="add" size={30} color="#FFF" />
           </Animated.View>
         </TouchableWithoutFeedback>
       </View>
@@ -256,191 +197,132 @@ export default function ChefMenuScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background
-  },
+  screen: { flex: 1, backgroundColor: COLORS.background },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  // ── Header ───────────────────────────────────────────
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 24,
     paddingVertical: 16,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    ...SHADOW.sm,
   },
-  title: {
-    fontSize: 24,
+  headerTag: {
+    fontSize: 10,
     fontWeight: '800',
-    color: COLORS.obsidian
+    color: COLORS.primary,
+    letterSpacing: 1.5,
+    marginBottom: 2,
   },
-  subtitle: {
-    fontSize: 13,
-    color: COLORS.grayDark,
-    fontWeight: '600',
-    marginTop: 2
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: COLORS.obsidian,
+    letterSpacing: -0.5,
   },
-  listContent: {
-    padding: 20,
-    paddingBottom: 100
-  },
-  center: {
-    flex: 1,
+  countBadge: {
+    backgroundColor: COLORS.primaryLight,
+    width: 44,
+    height: 44,
+    borderRadius: RADIUS.md,
     justifyContent: 'center',
-    alignItems: 'center'
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.primaryFaint,
   },
+  countText: { fontSize: 18, fontWeight: '900', color: COLORS.primary },
+
+  // ── List ─────────────────────────────────────────────
+  list: { padding: 16, paddingBottom: 110 },
+
+  // ── Card ─────────────────────────────────────────────
   card: {
     flexDirection: 'row',
     backgroundColor: COLORS.surface,
-    borderRadius: 20,
-    padding: 12,
-    marginBottom: 16,
-    shadowColor: COLORS.obsidian, // Using standard shadow color
-    shadowOpacity: 0.03,
-    shadowRadius: 12,
-    elevation: 2,
+    borderRadius: RADIUS.xl,
+    padding: 14,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: COLORS.border
+    borderColor: COLORS.light,
+    ...SHADOW.sm,
   },
-  image: {
-    width: 90,
-    height: 90,
-    borderRadius: 14,
-    backgroundColor: COLORS.placeholder
+  cardImg: {
+    width: 88,
+    height: 88,
+    borderRadius: RADIUS.lg,
+    backgroundColor: COLORS.border,
   },
-  content: {
-    flex: 1,
-    marginLeft: 14,
-    justifyContent: 'space-between'
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start'
-  },
-  name: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.obsidian,
-    flex: 1,
-    marginRight: 8
-  },
-  deleteBtn: {
-    padding: 4
-  },
-  desc: {
-    fontSize: 12,
-    color: COLORS.gray,
-    lineHeight: 16,
-    marginTop: 4
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 10
-  },
-  price: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.obsidian
-  },
-  badge: {
+  cardBody:   { flex: 1, marginLeft: 14, justifyContent: 'space-between' },
+  cardTop:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  cardName:   { fontSize: 15, fontWeight: '800', color: COLORS.obsidian, flex: 1, marginRight: 8 },
+  deleteBtn:  { padding: 4 },
+  cardDesc:   { fontSize: 12, color: COLORS.medium, lineHeight: 17, marginTop: 4 },
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
+  cardPrice:  { fontSize: 16, fontWeight: '900', color: COLORS.obsidian },
+  vegBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 8
+    borderRadius: RADIUS.sm,
+    gap: 4,
   },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: 6
-  },
-  badgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5
-  },
-  emptyState: {
-    alignItems: 'center',
-    marginTop: 60,
-    paddingHorizontal: 40
-  },
-  emptyIconBg: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: COLORS.placeholder,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: COLORS.obsidian,
-    marginBottom: 8
-  },
-  emptyText: {
-    textAlign: 'center',
-    color: COLORS.gray,
-    fontSize: 14,
-    lineHeight: 22
-  },
-  fabContainer: {
-    position: 'absolute',
-    bottom: 30,
-    right: 30,
-    alignItems: 'center'
-  },
+  vegDot: { width: 6, height: 6, borderRadius: 3 },
+  vegText: { fontSize: 9, fontWeight: '800', letterSpacing: 0.4 },
+
+  // ── Empty ─────────────────────────────────────────────
+  empty: { alignItems: 'center', marginTop: 60, paddingHorizontal: 40 },
+  emptyEmoji: { fontSize: 52, marginBottom: 14 },
+  emptyTitle: { fontSize: 20, fontWeight: '800', color: COLORS.obsidian, marginBottom: 8 },
+  emptySub:   { textAlign: 'center', color: COLORS.medium, fontSize: 14, lineHeight: 22 },
+
+  // ── FAB ───────────────────────────────────────────────
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.35)', zIndex: 1 },
+  fabWrap:  { position: 'absolute', bottom: 28, right: 24, alignItems: 'center', zIndex: 2 },
   fab: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: COLORS.fabShadow,
-    shadowOpacity: 0.4,
+    shadowColor: COLORS.primary,
+    shadowOpacity: 0.45,
     shadowOffset: { width: 0, height: 8 },
     shadowRadius: 16,
-    elevation: 8
+    elevation: 10,
   },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: COLORS.overlay,
-    zIndex: 1
-  },
-  menuItemsContainer: {
+  fabMenu: {
     position: 'absolute',
-    bottom: 80,
+    bottom: 72,
     right: 0,
     alignItems: 'flex-end',
-    gap: 16,
-    zIndex: 2
+    gap: 8,
   },
-  menuItem: {
+  fabMenuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.surface,
-    padding: 8,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-    shadowColor: COLORS.obsidian,
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 4,
-    marginBottom: 12
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: RADIUS.lg,
+    gap: 10,
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: COLORS.light,
+    ...SHADOW.md,
   },
-  menuIconBg: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  fabMenuIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12
   },
-  menuLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.obsidian
-  }
+  fabMenuLabel: { fontSize: 14, fontWeight: '700', color: COLORS.obsidian },
 });

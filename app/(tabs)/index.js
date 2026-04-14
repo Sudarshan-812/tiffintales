@@ -13,375 +13,373 @@ import {
   Image,
   StyleSheet,
   Dimensions,
-  ScrollView
+  ScrollView,
 } from 'react-native';
-
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { supabase } from '../../lib/supabase';
 import { useCart } from '../../lib/store';
 import { getCurrentLocation } from '../../lib/location';
 import DishCard from '../../components/DishCard';
+import { COLORS, SHADOW } from '../../lib/theme';
 
 const { width } = Dimensions.get('window');
 
-const COLORS = {
-  background: '#F9FAFB',
-  surface: '#FFFFFF',
-  obsidian: '#0F172A',
-  primary: '#7E22CE',
-  secondary: '#F3F4F6',
-  gray: '#6B7280',
-  border: '#E5E7EB',
-  green: '#10B981',
-  red: '#EF4444',
-  cartShadow: '#000',
-  primaryLight: '#F3E8FF',
-  promoBg1: '#FFF7ED',
-  promoBorder1: '#FFEDD5',
-  promoText1: '#C2410C',
-  promoSub1: '#9A3412',
-  promoCodeBg: 'rgba(255,255,255,0.6)',
-  promoBg2: '#EEF2FF',
-  promoBorder2: '#E0E7FF',
-  promoText2: '#3730A3',
-  promoSub2: '#312E81',
-  promoBtnBg: '#4338CA',
-  badgeActive: 'rgba(255,255,255,0.2)',
-  locationIconBg: '#F3F4F6',
-  searchIcon: '#0F172A',
-  viewCartText: 'rgba(255,255,255,0.6)',
-};
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// --- HELPER FUNCTIONS ---
 const isVeg = (item) => {
   if (item.is_veg !== undefined && item.is_veg !== null) return item.is_veg;
-  const text = (item.name + " " + item.description).toLowerCase();
-  const nonVegKeywords = ['chicken', 'egg', 'mutton', 'fish', 'prawn', 'meat', 'beef'];
-  return !nonVegKeywords.some(keyword => text.includes(keyword));
+  const text = (item.name + ' ' + (item.description || '')).toLowerCase();
+  return !['chicken','egg','mutton','fish','prawn','meat','beef'].some(k => text.includes(k));
 };
 
-// --- COMPONENTS ---
+const getGreeting = () => {
+  const h = new Date().getHours();
+  if (h < 12) return { emoji: '🌅', text: 'Good morning' };
+  if (h < 17) return { emoji: '☀️', text: 'Good afternoon' };
+  return { emoji: '🌙', text: 'Good evening' };
+};
 
-// 1. Promotional Banners
-const PromotionalBanner = () => (
-  <ScrollView 
-    horizontal 
-    showsHorizontalScrollIndicator={false} 
-    style={styles.promoScrollView}
-    contentContainerStyle={styles.promoContentContainer}
+// ─── Skeleton Card ────────────────────────────────────────────────────────────
+
+const SkeletonCard = () => {
+  const shimmer = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(shimmer, { toValue: 0, duration: 900, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+  const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] });
+  return (
+    <Animated.View style={[styles.skeletonCard, { opacity }]}>
+      <View style={styles.skeletonLeft}>
+        <View style={[styles.skeletonLine, { width: '30%', height: 10, marginBottom: 10 }]} />
+        <View style={[styles.skeletonLine, { width: '80%', height: 16, marginBottom: 8 }]} />
+        <View style={[styles.skeletonLine, { width: '40%', height: 12, marginBottom: 8 }]} />
+        <View style={[styles.skeletonLine, { width: '60%', height: 18, marginBottom: 8 }]} />
+        <View style={[styles.skeletonLine, { width: '90%', height: 11 }]} />
+      </View>
+      <View style={styles.skeletonImage} />
+    </Animated.View>
+  );
+};
+
+// ─── Promo Banners ────────────────────────────────────────────────────────────
+
+const PromoCard = ({ gradientColors, emoji, title, subtitle, codeOrBtn }) => (
+  <LinearGradient
+    colors={gradientColors}
+    start={{ x: 0, y: 0 }}
+    end={{ x: 1, y: 1 }}
+    style={styles.promoCard}
   >
-    {/* Offer 1 */}
-    <View style={[styles.promoCard, { backgroundColor: COLORS.promoBg1, borderColor: COLORS.promoBorder1 }]}>
-      <View style={styles.promoContent}>
-        <Text style={[styles.promoTitle, { color: COLORS.promoText1 }]}>50% OFF</Text>
-        <Text style={[styles.promoSubtitle, { color: COLORS.promoSub1 }]}>First 3 Orders</Text>
-        <View style={styles.promoCodeContainer}>
-           <Text style={[styles.promoCode, { color: COLORS.promoSub1 }]}>TIFFIN50</Text>
-        </View>
-      </View>
-      <Image 
-        source={{ uri: 'https://cdn-icons-png.flaticon.com/512/7541/7541673.png' }} 
-        style={styles.promoImage} 
-      />
+    <View style={styles.promoContent}>
+      <Text style={styles.promoEmoji}>{emoji}</Text>
+      <Text style={styles.promoTitle}>{title}</Text>
+      <Text style={styles.promoSub}>{subtitle}</Text>
+      {codeOrBtn}
     </View>
+    <View style={styles.promoCircle} />
+    <View style={styles.promoCircle2} />
+  </LinearGradient>
+);
 
-    {/* Offer 2 */}
-    <View style={[styles.promoCard, { backgroundColor: COLORS.promoBg2, borderColor: COLORS.promoBorder2, marginLeft: 12 }]}>
-      <View style={styles.promoContent}>
-        <Text style={[styles.promoTitle, { color: COLORS.promoText2 }]}>Free Delivery</Text>
-        <Text style={[styles.promoSubtitle, { color: COLORS.promoSub2 }]}>Orders {'>'} ₹150</Text>
+const PromoBanners = () => (
+  <ScrollView
+    horizontal
+    showsHorizontalScrollIndicator={false}
+    contentContainerStyle={styles.promoScrollContent}
+    style={styles.promoScroll}
+  >
+    <PromoCard
+      gradientColors={[COLORS.primary, COLORS.primaryDark]}
+      emoji="🎉"
+      title="50% OFF"
+      subtitle="First 3 orders"
+      codeOrBtn={
+        <View style={styles.promoCode}>
+          <Text style={styles.promoCodeText}>TIFFIN50</Text>
+        </View>
+      }
+    />
+    <PromoCard
+      gradientColors={['#06C167', '#059952']}
+      emoji="🛵"
+      title="Free Delivery"
+      subtitle="Orders above ₹150"
+      codeOrBtn={
         <TouchableOpacity style={styles.promoBtn}>
-           <Text style={styles.promoBtnText}>Order Now</Text>
+          <Text style={styles.promoBtnText}>Order Now</Text>
         </TouchableOpacity>
-      </View>
-      <Image 
-        source={{ uri: 'https://cdn-icons-png.flaticon.com/512/2830/2830305.png' }} 
-        style={styles.promoImage} 
-      />
-    </View>
+      }
+    />
+    <PromoCard
+      gradientColors={['#3B82F6', '#2563EB']}
+      emoji="👨‍🍳"
+      title="Chef Picks"
+      subtitle="Curated weekly meals"
+      codeOrBtn={
+        <TouchableOpacity style={styles.promoBtn}>
+          <Text style={styles.promoBtnText}>See Menu</Text>
+        </TouchableOpacity>
+      }
+    />
   </ScrollView>
 );
 
-// 2. Filter Chips
-const FilterChip = ({ label, icon, isActive, onPress, count }) => (
+// ─── Category Chips ───────────────────────────────────────────────────────────
+
+const CATEGORIES = [
+  { id: 'All',       label: 'All',      emoji: '🍽️' },
+  { id: 'Veg',       label: 'Veg',      emoji: '🥗' },
+  { id: 'Non-Veg',   label: 'Non-Veg',  emoji: '🍗' },
+  { id: 'Thali',     label: 'Thali',    emoji: '🍛' },
+  { id: 'Rice',      label: 'Rice',     emoji: '🍚' },
+  { id: 'Roti',      label: 'Roti',     emoji: '🫓' },
+  { id: 'Biryani',   label: 'Biryani',  emoji: '🍲' },
+  { id: 'Snacks',    label: 'Snacks',   emoji: '🥙' },
+];
+
+const CategoryChip = ({ cat, isActive, onPress }) => (
   <TouchableOpacity
     onPress={onPress}
-    activeOpacity={0.7}
-    style={[
-      styles.filterChip,
-      isActive ? styles.filterChipActive : styles.filterChipInactive
-    ]}
+    activeOpacity={0.75}
+    style={[styles.chip, isActive && styles.chipActive]}
   >
-    {icon && (
-      <Ionicons
-        name={icon}
-        size={16}
-        color={isActive ? COLORS.surface : COLORS.gray}
-        style={styles.filterIcon}
-      />
-    )}
-    <Text style={[styles.filterText, isActive && styles.filterTextActive]}>
-      {label}
-    </Text>
-    {isActive && (
-      <View style={styles.countBadgeActive}>
-        <Text style={styles.countTextActive}>{count}</Text>
-      </View>
-    )}
+    <Text style={styles.chipEmoji}>{cat.emoji}</Text>
+    <Text style={[styles.chipLabel, isActive && styles.chipLabelActive]}>{cat.label}</Text>
   </TouchableOpacity>
 );
 
-// 3. Home Header
-const HomeHeader = ({
-  insets,
-  locationStatus,
-  searchQuery,
-  setSearchQuery,
-  category,
-  setCategory,
-  menuItems,
-  filteredCount,
-  onLogout
-}) => (
-  <View style={styles.headerWrapper}>
-    <View style={[styles.headerContainer, { paddingTop: insets.top + 10 }]}>
-      
-      {/* Location Row */}
-      <View style={styles.topRow}>
-        <View style={styles.locationContainer}>
-          <View style={styles.locationIconBg}>
-            <Ionicons name="location" size={20} color={COLORS.obsidian} />
-          </View>
-          <View>
-            <Text style={styles.locationLabel}>DELIVERING TO</Text>
-            <TouchableOpacity style={styles.locationSelector}>
-              <Text style={styles.locationTitle}>VIJAYAPURA</Text>
-              <Ionicons name="caret-down" size={12} color={COLORS.obsidian} style={{ marginLeft: 4 }} />
-            </TouchableOpacity>
-          </View>
-        </View>
+// ─── Header ───────────────────────────────────────────────────────────────────
 
-        <TouchableOpacity onPress={onLogout} style={styles.profileButton}>
-          <Image 
-            source={{ uri: 'https://api.dicebear.com/7.x/avataaars/png?seed=Chef' }} 
-            style={styles.profileImage}
-          />
+const HomeHeader = ({
+  insets, greeting, locationStatus,
+  searchQuery, setSearchQuery,
+  category, setCategory,
+  menuItems, onLogout,
+}) => (
+  <View>
+    {/* Top white header */}
+    <View style={[styles.topHeader, { paddingTop: insets.top + 8 }]}>
+      {/* Row 1: Location + Avatar */}
+      <View style={styles.headerRow}>
+        <TouchableOpacity style={styles.locationBtn} activeOpacity={0.7}>
+          <Ionicons name="location" size={16} color={COLORS.primary} />
+          <View style={styles.locationText}>
+            <Text style={styles.locationLabel}>DELIVERING TO</Text>
+            <View style={styles.locationNameRow}>
+              <Text style={styles.locationName} numberOfLines={1}>
+                {locationStatus === 'Current Location' ? 'Current Location' : 'Vijayapura'}
+              </Text>
+              <Ionicons name="chevron-down" size={13} color={COLORS.obsidian} style={{ marginLeft: 2 }} />
+            </View>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={onLogout} activeOpacity={0.8} style={styles.avatarBtn}>
+          <Text style={styles.avatarInitial}>U</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Hero Text */}
-      <View style={styles.heroTextContainer}>
-        <Text style={styles.heroGreeting}>Hungry?</Text>
-        <Text style={styles.heroQuestion}>Order homemade food.</Text>
+      {/* Row 2: Greeting */}
+      <View style={styles.greetingRow}>
+        <Text style={styles.greetingEmoji}>{greeting.emoji}</Text>
+        <View>
+          <Text style={styles.greetingText}>{greeting.text}!</Text>
+          <Text style={styles.greetingSub}>What's on your plate today?</Text>
+        </View>
       </View>
 
-      {/* Search Bar */}
-      <View style={styles.searchFloatingContainer}>
-        <Ionicons name="search" size={20} color={COLORS.obsidian} style={styles.searchIcon} />
+      {/* Row 3: Search */}
+      <View style={styles.searchBar}>
+        <Ionicons name="search-outline" size={19} color={COLORS.gray} style={{ marginRight: 10 }} />
         <TextInput
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholder="Search 'Paneer', 'Thali'..."
+          placeholder="Search 'Paneer', 'Biryani'..."
           placeholderTextColor={COLORS.gray}
           style={styles.searchInput}
+          returnKeyType="search"
+          onSubmitEditing={Keyboard.dismiss}
         />
         {searchQuery.length > 0 ? (
-          <TouchableOpacity onPress={() => { setSearchQuery(''); Keyboard.dismiss(); }}>
+          <TouchableOpacity onPress={() => { setSearchQuery(''); Keyboard.dismiss(); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="close-circle" size={18} color={COLORS.gray} />
           </TouchableOpacity>
         ) : (
-          <View style={styles.micButton}>
-             <Ionicons name="mic" size={18} color={COLORS.gray} />
+          <View style={styles.micDivider}>
+            <Ionicons name="mic-outline" size={18} color={COLORS.medium} />
           </View>
         )}
       </View>
     </View>
 
-    {/* Filters & Banners */}
-    <View style={styles.bodyContentContainer}>
-      <PromotionalBanner />
-      
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Eat what makes you happy</Text>
-      </View>
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterScrollContent}>
-        <FilterChip
-          label="All"
-          isActive={category === 'All'}
-          onPress={() => setCategory('All')}
-          count={menuItems.length}
-        />
-        <FilterChip
-          label="Veg Only"
-          icon="leaf"
-          isActive={category === 'Veg'}
-          onPress={() => setCategory('Veg')}
-          count={menuItems.filter(i => isVeg(i)).length}
-        />
-        <FilterChip
-          label="Non-Veg"
-          icon="fish"
-          isActive={category === 'Non-Veg'}
-          onPress={() => setCategory('Non-Veg')}
-          count={menuItems.filter(i => !isVeg(i)).length}
-        />
-      </ScrollView>
-
-      <View style={styles.listDivider} />
+    {/* Promo Banners */}
+    <View style={styles.promoSection}>
+      <PromoBanners />
     </View>
+
+    {/* Section label */}
+    <View style={styles.sectionRow}>
+      <Text style={styles.sectionTitle}>Popular Near You</Text>
+      <TouchableOpacity>
+        <Text style={styles.sectionLink}>See all</Text>
+      </TouchableOpacity>
+    </View>
+
+    {/* Category chips */}
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.chipScroll}
+      style={{ marginBottom: 8 }}
+    >
+      {CATEGORIES.map(cat => (
+        <CategoryChip
+          key={cat.id}
+          cat={cat}
+          isActive={category === cat.id}
+          onPress={() => setCategory(cat.id)}
+        />
+      ))}
+    </ScrollView>
+
+    <View style={styles.listDivider} />
   </View>
 );
 
-// 4. FLOATING CART
-const FloatingCart = ({ cart, total, count, slideUpAnim, insets, onPress }) => {
-  const cartImages = [...new Set(cart.map(item => item.image_url))].slice(0, 3);
+// ─── Floating Cart ────────────────────────────────────────────────────────────
+
+const FloatingCart = ({ cart, total, count, slideAnim, insets, onPress }) => {
+  const pulse = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.sequence([
+      Animated.spring(pulse, { toValue: 1.04, useNativeDriver: true, friction: 4 }),
+      Animated.spring(pulse, { toValue: 1,    useNativeDriver: true, friction: 4 }),
+    ]).start();
+  }, [count]);
 
   return (
-    <Animated.View
-      style={[
-        styles.floatingCartContainer,
-        {
-          bottom: insets.bottom > 0 ? insets.bottom : 20,
-          transform: [{ translateY: slideUpAnim }]
-        }
-      ]}
-    >
-      <TouchableOpacity
-        onPress={onPress}
-        activeOpacity={0.9}
-        style={styles.floatingCartButton}
-      >
-        <View style={styles.cartLeftSection}>
-          <View style={styles.cartImagesContainer}>
-            {cartImages.map((uri, index) => (
-              <Image
-                key={index}
-                source={{ uri: uri || 'https://via.placeholder.com/50' }}
-                style={[
-                  styles.cartThumbnail,
-                  { marginLeft: index === 0 ? 0 : -14 }
-                ]}
-              />
-            ))}
+    <Animated.View style={[styles.floatContainer, {
+      bottom: insets.bottom > 0 ? insets.bottom + 8 : 20,
+      transform: [{ translateY: slideAnim }, { scale: pulse }],
+    }]}>
+      <TouchableOpacity onPress={onPress} activeOpacity={0.9} style={styles.floatBtn}>
+
+        {/* Left — badge + label */}
+        <View style={styles.floatLeft}>
+          <View style={styles.floatBadge}>
+            <Ionicons name="bag-handle" size={15} color={COLORS.primary} />
+            <Text style={styles.floatBadgeNum}>{count}</Text>
           </View>
-          <View>
-            <Text style={styles.cartCountText}>
-              {count} {count === 1 ? 'Item' : 'Items'}
-            </Text>
-            <Text style={styles.viewCartText}>View Cart</Text>
+          <Text style={styles.floatItemsText}>
+            {count === 1 ? '1 item added' : `${count} items added`}
+          </Text>
+        </View>
+
+        {/* Divider */}
+        <View style={styles.floatDivider} />
+
+        {/* Right — price + caret */}
+        <View style={styles.floatRight}>
+          <Text style={styles.floatTotal}>₹{total}</Text>
+          <View style={styles.floatArrow}>
+            <Ionicons name="chevron-forward" size={16} color={COLORS.primary} />
           </View>
         </View>
 
-        <View style={styles.cartRightSection}>
-          <View style={styles.cartTotalContainer}>
-            <Text style={styles.cartTotalText}>₹{total}</Text>
-          </View>
-          <Ionicons name="arrow-forward-circle" size={28} color={COLORS.surface} />
-        </View>
       </TouchableOpacity>
     </Animated.View>
   );
 };
 
-// --- MAIN SCREEN ---
-export default function HomeScreen() {
-  const insets = useSafeAreaInsets();
-  const router = useRouter();
-  const scrollY = useRef(new Animated.Value(0)).current;
-  const slideUpAnim = useRef(new Animated.Value(100)).current;
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 
-  const [menuItems, setMenuItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+export default function HomeScreen() {
+  const insets   = useSafeAreaInsets();
+  const router   = useRouter();
+  const slideAnim = useRef(new Animated.Value(120)).current;
+
+  const [menuItems, setMenuItems]   = useState([]);
+  const [loading, setLoading]       = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [category, setCategory] = useState('All');
-  const [userPosition, setUserPosition] = useState(null);
-  const [locationStatus, setLocationStatus] = useState('Locating...');
+  const [category, setCategory]     = useState('All');
+  const [userPosition, setUserPos]  = useState(null);
+  const [locationStatus, setLocSts] = useState('Loading...');
 
   const { cart, getCartTotal, signOut, setUserLocation } = useCart();
+  const greeting = getGreeting();
+
+  useEffect(() => { initData(); }, []);
 
   useEffect(() => {
-    initializeData();
-  }, []);
-
-  useEffect(() => {
-    if (cart.length > 0) {
-      Animated.spring(slideUpAnim, {
-        toValue: 0,
-        useNativeDriver: true,
-        friction: 8,
-        tension: 40
-      }).start();
-    } else {
-      Animated.timing(slideUpAnim, {
-        toValue: 100,
-        duration: 200,
-        useNativeDriver: true
-      }).start();
-    }
+    Animated.spring(slideAnim, {
+      toValue: cart.length > 0 ? 0 : 120,
+      useNativeDriver: true,
+      friction: 8,
+      tension: 40,
+    }).start();
   }, [cart.length]);
 
-  const initializeData = async () => {
+  const initData = async () => {
     setLoading(true);
     try {
+      // Location
       try {
         const coords = await getCurrentLocation();
-        if (coords) {
-          setUserPosition(coords);
-          setUserLocation(coords);
-          setLocationStatus('Current Location');
-        } else {
-          setLocationStatus('Location Denied');
-        }
-      } catch (e) {
-        setLocationStatus('Vijayapura (Default)');
-      }
+        if (coords) { setUserPos(coords); setUserLocation(coords); setLocSts('Current Location'); }
+        else setLocSts('Location off');
+      } catch { setLocSts('Location off'); }
 
+      // Menu
       const { data, error } = await supabase
         .from('menu_items')
-        .select(`*, profiles:chef_id ( latitude, longitude )`);
-
+        .select('*, profiles:chef_id(latitude, longitude)');
       if (error) throw error;
       setMenuItems(data || []);
-
-    } catch (error) {
-      Alert.alert('Error', error.message);
+    } catch (e) {
+      Alert.alert('Error', e.message);
     } finally {
       setLoading(false);
     }
   };
 
   const filteredItems = menuItems.filter(item => {
-    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    const q = searchQuery.toLowerCase();
+    const matchSearch = item.name.toLowerCase().includes(q) ||
+      (item.description || '').toLowerCase().includes(q);
 
-    const itemIsVeg = isVeg(item);
-    let matchesCategory = true;
-    if (category === 'Veg') matchesCategory = itemIsVeg;
-    if (category === 'Non-Veg') matchesCategory = !itemIsVeg;
-
-    return matchesSearch && matchesCategory;
+    const vegItem = isVeg(item);
+    let matchCat = true;
+    if (category === 'Veg')     matchCat = vegItem;
+    if (category === 'Non-Veg') matchCat = !vegItem;
+    if (!['All','Veg','Non-Veg'].includes(category)) {
+      const nameDesc = (item.name + ' ' + (item.description || '')).toLowerCase();
+      matchCat = nameDesc.includes(category.toLowerCase());
+    }
+    return matchSearch && matchCat;
   });
 
   const handleLogout = () => {
-    Alert.alert('Log Out', 'Are you sure?', [
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Log Out',
-        style: 'destructive',
-        onPress: async () => {
-          await signOut();
-          router.replace('/login');
-        }
-      }
+      { text: 'Sign Out', style: 'destructive', onPress: async () => {
+        await signOut();
+        router.replace('/login');
+      }},
     ]);
   };
 
   const renderItem = ({ item }) => (
-    <View style={styles.cardWrapper}>
+    <View style={styles.cardPad}>
       <DishCard dish={item} userLocation={userPosition} />
     </View>
   );
@@ -391,10 +389,26 @@ export default function HomeScreen() {
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.surface} />
 
       {loading ? (
-        <View style={styles.loaderContainer}>
-          <ActivityIndicator size="large" color={COLORS.obsidian} />
-          <Text style={styles.loaderText}>Setting up the kitchen...</Text>
-        </View>
+        <FlatList
+          data={[...Array(3)]}
+          keyExtractor={(_, i) => `sk-${i}`}
+          renderItem={() => <View style={styles.cardPad}><SkeletonCard /></View>}
+          ListHeaderComponent={
+            <HomeHeader
+              insets={insets}
+              greeting={greeting}
+              locationStatus={locationStatus}
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              category={category}
+              setCategory={setCategory}
+              menuItems={[]}
+              onLogout={handleLogout}
+            />
+          }
+          contentContainerStyle={{ paddingBottom: 40 }}
+          showsVerticalScrollIndicator={false}
+        />
       ) : (
         <FlatList
           data={filteredItems}
@@ -403,27 +417,30 @@ export default function HomeScreen() {
           ListHeaderComponent={
             <HomeHeader
               insets={insets}
+              greeting={greeting}
               locationStatus={locationStatus}
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}
               category={category}
               setCategory={setCategory}
               menuItems={menuItems}
-              filteredCount={filteredItems.length}
               onLogout={handleLogout}
             />
           }
-          contentContainerStyle={{ paddingBottom: cart.length > 0 ? 140 : 40 }}
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { useNativeDriver: false }
-          )}
+          contentContainerStyle={{ paddingBottom: cart.length > 0 ? 150 : 40 }}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
-            <View style={styles.emptyStateContainer}>
-              <Ionicons name="fast-food-outline" size={60} color={COLORS.border} />
-              <Text style={styles.emptyStateTitle}>No items found</Text>
-              <Text style={styles.emptyStateText}>Try searching for 'Roti' or 'Dal'</Text>
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyEmoji}>🍽️</Text>
+              <Text style={styles.emptyTitle}>Nothing found</Text>
+              <Text style={styles.emptySub}>
+                {searchQuery ? `No results for "${searchQuery}"` : 'No dishes in this category yet'}
+              </Text>
+              {searchQuery ? (
+                <TouchableOpacity style={styles.clearSearchBtn} onPress={() => setSearchQuery('')}>
+                  <Text style={styles.clearSearchText}>Clear Search</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           }
         />
@@ -432,9 +449,9 @@ export default function HomeScreen() {
       {cart.length > 0 && (
         <FloatingCart
           cart={cart}
-          count={cart.reduce((sum, item) => sum + item.quantity, 0)}
+          count={cart.reduce((s, i) => s + i.quantity, 0)}
           total={getCartTotal()}
-          slideUpAnim={slideUpAnim}
+          slideAnim={slideAnim}
           insets={insets}
           onPress={() => router.push('/cart')}
         />
@@ -444,336 +461,291 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  loaderContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
-  },
-  loaderText: {
-    marginTop: 10,
-    color: COLORS.gray,
-    fontWeight: '500',
-  },
-  cardWrapper: {
-    paddingHorizontal: 16,
-    marginBottom: 16,
-  },
-  listDivider: {
-    height: 1,
-    backgroundColor: COLORS.border,
-    marginHorizontal: 20,
-    marginBottom: 20,
-    marginTop: 10,
-  },
-  
-  // --- HEADER STYLES ---
-  headerWrapper: {
-    backgroundColor: COLORS.background,
-  },
-  headerContainer: {
+  container: { flex: 1, backgroundColor: COLORS.background },
+
+  // ── Top Header ────────────────────────────────────
+  topHeader: {
     backgroundColor: COLORS.surface,
-    paddingBottom: 24,
     paddingHorizontal: 20,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-    shadowColor: COLORS.cartShadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 5,
-    zIndex: 10,
+    paddingBottom: 20,
+    ...SHADOW.md,
   },
-  topRow: {
+  headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 18,
   },
-  locationContainer: {
+  locationBtn: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  locationIconBg: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: COLORS.locationIconBg,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
+  locationText: { marginLeft: 8 },
   locationLabel: {
     fontSize: 10,
-    color: COLORS.gray,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    color: COLORS.gray,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
-  locationSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  locationTitle: {
+  locationNameRow: { flexDirection: 'row', alignItems: 'center', marginTop: 1 },
+  locationName: {
     fontSize: 14,
     fontWeight: '800',
     color: COLORS.obsidian,
+    maxWidth: width * 0.5,
   },
-  profileButton: {
-    shadowColor: COLORS.cartShadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+  avatarBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
   },
-  profileImage: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 2,
-    borderColor: COLORS.surface,
-  },
-  heroTextContainer: {
-    marginBottom: 20,
-  },
-  heroGreeting: {
-    fontSize: 16,
-    color: COLORS.gray,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  heroQuestion: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: COLORS.obsidian,
-  },
-  searchFloatingContainer: {
+  avatarInitial: { color: COLORS.surface, fontSize: 16, fontWeight: '800' },
+
+  greetingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    height: 52,
-    shadowColor: COLORS.cartShadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    marginBottom: 16,
+    gap: 10,
   },
-  searchIcon: {
-    marginRight: 10,
+  greetingEmoji: { fontSize: 26 },
+  greetingText: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: COLORS.obsidian,
+    letterSpacing: -0.5,
+  },
+  greetingSub: {
+    fontSize: 13,
+    color: COLORS.medium,
+    fontWeight: '500',
+    marginTop: 1,
+  },
+
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.inputBg,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    height: 50,
+    borderWidth: 1.5,
+    borderColor: COLORS.light,
   },
   searchInput: {
     flex: 1,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
     color: COLORS.obsidian,
     height: '100%',
   },
-  micButton: {
-    paddingLeft: 8,
+  micDivider: {
+    paddingLeft: 10,
     borderLeftWidth: 1,
-    borderLeftColor: COLORS.border,
+    borderLeftColor: COLORS.light,
   },
 
-  // --- CONTENT STYLES ---
-  bodyContentContainer: {
-    marginTop: 16,
-  },
-  promoScrollView: {
-    marginBottom: 24,
-  },
-  promoContentContainer: {
-    paddingHorizontal: 20,
-  },
+  // ── Promo ──────────────────────────────────────────
+  promoSection: { marginTop: 18 },
+  promoScroll: {},
+  promoScrollContent: { paddingHorizontal: 20, gap: 12 },
   promoCard: {
-    width: width * 0.72,
-    height: 130,
+    width: width * 0.68,
+    height: 138,
     borderRadius: 20,
     padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
+    paddingBottom: 14,
+    overflow: 'hidden',
+    position: 'relative',
     justifyContent: 'space-between',
-    borderWidth: 1,
   },
-  promoContent: {
-    flex: 1,
-  },
-  promoTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    marginBottom: 2,
-  },
-  promoSubtitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 10,
-  },
-  promoCodeContainer: {
-    backgroundColor: COLORS.promoCodeBg,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    alignSelf: 'flex-start',
-  },
+  promoContent: { zIndex: 1, flex: 1, justifyContent: 'space-between' },
+  promoEmoji: { fontSize: 20, marginBottom: 0 },
+  promoTitle: { fontSize: 22, fontWeight: '900', color: '#FFF', letterSpacing: -0.5, lineHeight: 26 },
+  promoSub: { fontSize: 11, color: 'rgba(255,255,255,0.85)', fontWeight: '500', marginBottom: 8, lineHeight: 15 },
   promoCode: {
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  promoBtn: {
-    backgroundColor: COLORS.promoBtnBg,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
     alignSelf: 'flex-start',
-  },
-  promoBtnText: {
-    color: COLORS.surface,
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  promoImage: {
-    width: 70,
-    height: 70,
-    resizeMode: 'contain',
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.obsidian,
-  },
-  filterScroll: {
-    marginBottom: 10,
-  },
-  filterScrollContent: {
-    paddingHorizontal: 20,
-  },
-  filterChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 10,
-    backgroundColor: COLORS.surface,
+    backgroundColor: 'rgba(255,255,255,0.28)',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 7,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: 'rgba(255,255,255,0.35)',
   },
-  filterChipActive: {
-    backgroundColor: COLORS.obsidian,
-    borderColor: COLORS.obsidian,
+  promoCodeText: { color: '#FFF', fontSize: 11, fontWeight: '800', letterSpacing: 0.6 },
+  promoBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.28)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
   },
-  filterChipInactive: {},
-  filterIcon: {
-    marginRight: 6,
+  promoBtnText: { color: '#FFF', fontSize: 11, fontWeight: '700' },
+  promoCircle: {
+    position: 'absolute',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    right: -20,
+    bottom: -30,
   },
-  filterText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.gray,
-  },
-  filterTextActive: {
-    color: COLORS.surface,
-    fontWeight: '700',
-  },
-  countBadgeActive: {
-    backgroundColor: COLORS.badgeActive,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 6,
-  },
-  countTextActive: {
-    color: COLORS.surface,
-    fontSize: 9,
-    fontWeight: '800',
-  },
-  emptyStateContainer: {
-    alignItems: 'center',
-    marginTop: 40,
-  },
-  emptyStateTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.obsidian,
-    marginTop: 10,
-  },
-  emptyStateText: {
-    marginTop: 4,
-    fontSize: 14,
-    color: COLORS.gray,
+  promoCircle2: {
+    position: 'absolute',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    right: 50,
+    top: -20,
   },
 
-  // --- FLOATING CART STYLES ---
-  floatingCartContainer: {
+  // ── Section / Chips ────────────────────────────────
+  sectionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginTop: 22,
+    marginBottom: 14,
+  },
+  sectionTitle: { fontSize: 20, fontWeight: '900', color: COLORS.obsidian, letterSpacing: -0.3 },
+  sectionLink: { fontSize: 13, fontWeight: '700', color: COLORS.primary },
+  chipScroll: { paddingHorizontal: 20, gap: 8 },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 22,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1.5,
+    borderColor: COLORS.light,
+    gap: 5,
+  },
+  chipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  chipEmoji: { fontSize: 14 },
+  chipLabel: { fontSize: 13, fontWeight: '600', color: COLORS.medium },
+  chipLabelActive: { color: COLORS.surface, fontWeight: '800' },
+
+  listDivider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginHorizontal: 20,
+    marginTop: 8,
+    marginBottom: 16,
+  },
+
+  // ── Cards ──────────────────────────────────────────
+  cardPad: { paddingHorizontal: 16, marginBottom: 14 },
+
+  // ── Skeleton ───────────────────────────────────────
+  skeletonCard: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.light,
+  },
+  skeletonLeft: { flex: 1, paddingRight: 14 },
+  skeletonLine: { backgroundColor: COLORS.border, borderRadius: 6, marginBottom: 6 },
+  skeletonImage: {
+    width: 118,
+    height: 112,
+    borderRadius: 16,
+    backgroundColor: COLORS.border,
+  },
+
+  // ── Empty State ────────────────────────────────────
+  emptyState: { alignItems: 'center', paddingTop: 50, paddingHorizontal: 40 },
+  emptyEmoji: { fontSize: 52, marginBottom: 14 },
+  emptyTitle: { fontSize: 20, fontWeight: '800', color: COLORS.obsidian, marginBottom: 8 },
+  emptySub: { fontSize: 14, color: COLORS.medium, textAlign: 'center', lineHeight: 20 },
+  clearSearchBtn: {
+    marginTop: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: COLORS.primaryLight,
+    borderRadius: 12,
+  },
+  clearSearchText: { color: COLORS.primary, fontWeight: '700', fontSize: 14 },
+
+  // ── Floating Cart ──────────────────────────────────
+  floatContainer: {
     position: 'absolute',
-    left: 16,
-    right: 16,
+    left: 14,
+    right: 14,
     zIndex: 100,
   },
-  floatingCartButton: {
-    backgroundColor: COLORS.obsidian,
-    borderRadius: 16,
-    padding: 14,
+  floatBtn: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
+    paddingVertical: 12,
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    shadowColor: COLORS.cartShadow,
+    shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 12,
+    shadowOpacity: 0.28,
+    shadowRadius: 22,
+    elevation: 20,
+    borderWidth: 1.5,
+    borderColor: COLORS.primaryLight,
   },
-  cartLeftSection: {
+  floatLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  floatBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: COLORS.primaryLight,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 5,
   },
-  cartImagesContainer: {
-    flexDirection: 'row',
-    marginRight: 12,
+  floatBadgeNum: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: COLORS.primary,
   },
-  cartThumbnail: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: COLORS.obsidian,
+  floatItemsText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.dark,
   },
-  cartCountText: {
-    color: COLORS.surface,
-    fontWeight: '800',
-    fontSize: 16,
+  floatDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: COLORS.light,
+    marginHorizontal: 12,
   },
-  viewCartText: {
-    color: COLORS.viewCartText,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  cartRightSection: {
-    flexDirection: 'row',
+  floatRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  floatTotal: { fontSize: 18, fontWeight: '900', color: COLORS.obsidian },
+  floatArrow: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    backgroundColor: COLORS.primaryLight,
+    justifyContent: 'center',
     alignItems: 'center',
-  },
-  cartTotalContainer: {
-    alignItems: 'flex-end',
-    marginRight: 10,
-  },
-  cartTotalText: {
-    color: COLORS.surface,
-    fontSize: 18,
-    fontWeight: '800',
   },
 });

@@ -1,207 +1,217 @@
-import React, { useMemo } from 'react';
-import { 
-  View, 
-  Text, 
-  Image, 
-  TouchableOpacity, 
-  StyleSheet, 
-  Vibration 
+import React, { useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  StyleSheet,
+  Vibration,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useCart } from '../lib/store'; 
+import { useCart } from '../lib/store';
+import { COLORS } from '../lib/theme';
 
-// Your Obsidian Theme
-const COLORS = {
-  surface: '#FFFFFF',
-  obsidian: '#111827',    
-  gray: '#6B7280',
-  lightGray: '#F3F4F6',
-  green: '#10B981',       
-  red: '#EF4444',         
-  primary: '#7E22CE',     
-  border: '#E5E7EB',
-  shadow: '#000000',
-  gold: '#F59E0B',
-};
-
-// Utility Functions
+// ─── Utilities ───────────────────────────────────────────────────────────────
 
 const isVeg = (dish) => {
   if (dish.is_veg !== undefined && dish.is_veg !== null) return dish.is_veg;
-  const text = (dish.name + " " + dish.description).toLowerCase();
-  const nonVegKeywords = ['chicken', 'egg', 'mutton', 'fish', 'meat', 'prawn', 'beef'];
-  return !nonVegKeywords.some(k => text.includes(k));
+  const text = (dish.name + ' ' + (dish.description || '')).toLowerCase();
+  const nonVegWords = ['chicken', 'egg', 'mutton', 'fish', 'meat', 'prawn', 'beef', 'pork'];
+  return !nonVegWords.some(k => text.includes(k));
 };
 
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
   if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
-  const R = 6371; 
+  const R = 6371;
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
-  const a = 
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c; 
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * (Math.PI / 180)) *
+    Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-// Sub-Components
+// ─── Sub-Components ───────────────────────────────────────────────────────────
 
 const VegIndicator = ({ isVegetarian }) => (
-  <View style={[styles.vegBox, { borderColor: isVegetarian ? COLORS.green : COLORS.red }]}>
-    <View style={[styles.vegDot, { backgroundColor: isVegetarian ? COLORS.green : COLORS.red }]} />
+  <View style={[styles.vegBox, { borderColor: isVegetarian ? COLORS.success : COLORS.error }]}>
+    <View style={[styles.vegDot, { backgroundColor: isVegetarian ? COLORS.success : COLORS.error }]} />
   </View>
 );
 
-const RatingBadge = () => (
-  <View style={styles.ratingBadge}>
-    <View style={styles.starsRow}>
-      {[1,2,3,4].map(i => <Ionicons key={i} name="star" size={10} color={COLORS.gold} />)}
-      <Ionicons name="star-half" size={10} color={COLORS.gold} />
-    </View>
-    <Text style={styles.ratingCount}>(42)</Text>
+const StarRating = ({ rating = 4.5, count = 42 }) => (
+  <View style={styles.ratingRow}>
+    <Ionicons name="star" size={11} color={COLORS.warning} />
+    <Text style={styles.ratingNum}>{rating}</Text>
+    <Text style={styles.ratingCount}> ({count})</Text>
   </View>
 );
 
+const MetaPill = ({ icon, label }) => (
+  <View style={styles.metaPill}>
+    <Ionicons name={icon} size={11} color={COLORS.medium} />
+    <Text style={styles.metaText}>{label}</Text>
+  </View>
+);
 
-// Main Component
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function DishCard({ dish, showAddButton = true, userLocation }) {
   const { addToCart, removeFromCart, cart } = useCart();
+  const [isFav, setIsFav] = useState(false);
 
-  // Optimization: Recalculate distance only when coordinates change
   const distanceInfo = useMemo(() => {
     const chefLat = dish.profiles?.latitude;
     const chefLon = dish.profiles?.longitude;
-    
     if (userLocation && chefLat) {
-      const dist = calculateDistance(userLocation.latitude, userLocation.longitude, chefLat, chefLon);
+      const dist = calculateDistance(
+        userLocation.latitude, userLocation.longitude,
+        chefLat, chefLon
+      );
       return { value: dist, isTooFar: dist > 5 };
     }
     return { value: 0, isTooFar: false };
   }, [userLocation, dish.profiles]);
 
-  const itemIsVeg = isVeg(dish);
-  const cartItem = cart.find((i) => i.id === dish.id);
-  const quantity = cartItem ? cartItem.quantity : 0;
+  const vegItem      = isVeg(dish);
+  const cartItem     = cart.find(i => i.id === dish.id);
+  const quantity     = cartItem ? cartItem.quantity : 0;
+  const isBestseller = (dish.order_count ?? 0) > 10;
 
-  const handleAdd = () => { Vibration.vibrate(10); addToCart(dish); };
+  const handleAdd    = () => { Vibration.vibrate(10); addToCart(dish); };
   const handleRemove = () => { Vibration.vibrate(10); removeFromCart(dish.id); };
+  const toggleFav    = () => setIsFav(v => !v);
 
   return (
-    <View style={styles.cardContainer}>
-      
-      {/* LEFT: Information Column */}
-      <View style={styles.infoColumn}>
-        <View style={styles.iconRow}>
-          <VegIndicator isVegetarian={itemIsVeg} />
-          {itemIsVeg ? 
-            <Text style={[styles.tagText, { color: COLORS.green }]}>VEG</Text> : 
-            <Text style={[styles.tagText, { color: COLORS.red }]}>NON-VEG</Text>
-          }
-        </View>
+    <View style={styles.card}>
+      {/* ── Left: Info ────────────────────── */}
+      <View style={styles.infoCol}>
 
-        <Text style={styles.dishName}>{dish.name}</Text>
-        
-        <RatingBadge />
-
-        <View style={styles.priceRow}>
-          <Text style={styles.price}>₹{dish.price}</Text>
-          {dish.old_price && <Text style={styles.oldPrice}>₹{dish.old_price}</Text>}
-        </View>
-
-        <Text style={styles.description} numberOfLines={2}>
-          {dish.description || "Freshly prepared home-cooked meal made with authentic spices."}
-        </Text>
-
-        {/* Distance/Time Meta */}
-        <View style={styles.metaContainer}>
-          {distanceInfo.value > 0 && (
-            <View style={styles.metaPill}>
-              <Ionicons name="location-sharp" size={10} color={COLORS.gray} />
-              <Text style={styles.metaText}>{distanceInfo.value.toFixed(1)} km</Text>
+        {/* Veg tag row */}
+        <View style={styles.tagRow}>
+          <VegIndicator isVegetarian={vegItem} />
+          <Text style={[
+            styles.tagLabel,
+            { color: vegItem ? COLORS.success : COLORS.error }
+          ]}>
+            {vegItem ? 'VEG' : 'NON-VEG'}
+          </Text>
+          {isBestseller && (
+            <View style={styles.bestsellerBadge}>
+              <Ionicons name="flame" size={9} color={COLORS.primary} />
+              <Text style={styles.bestsellerText}>BESTSELLER</Text>
             </View>
           )}
-          <View style={styles.metaPill}>
-            <Ionicons name="time" size={10} color={COLORS.gray} />
-            <Text style={styles.metaText}>25 min</Text>
-          </View>
+        </View>
+
+        {/* Name */}
+        <Text style={styles.name} numberOfLines={2}>{dish.name}</Text>
+
+        {/* Rating */}
+        <StarRating />
+
+        {/* Price */}
+        <View style={styles.priceRow}>
+          <Text style={styles.price}>₹{dish.price}</Text>
+          {dish.old_price ? (
+            <Text style={styles.oldPrice}>₹{dish.old_price}</Text>
+          ) : null}
+        </View>
+
+        {/* Description */}
+        <Text style={styles.desc} numberOfLines={2}>
+          {dish.description || 'Freshly prepared home-cooked meal made with authentic spices.'}
+        </Text>
+
+        {/* Meta: distance + time */}
+        <View style={styles.metaRow}>
+          {distanceInfo.value > 0 && (
+            <MetaPill icon="navigate-outline" label={`${distanceInfo.value.toFixed(1)} km`} />
+          )}
+          <MetaPill icon="time-outline" label="25 min" />
         </View>
       </View>
 
-      {/* RIGHT: Image & Action Column */}
-      <View style={styles.imageColumn}>
-        <View style={styles.imageWrapper}>
-          <Image 
-            source={{ uri: dish.image_url || 'https://via.placeholder.com/150' }} 
-            style={styles.dishImage}
+      {/* ── Right: Image + CTA ────────────── */}
+      <View style={styles.imageCol}>
+
+        {/* Image with favourite overlay */}
+        <View style={styles.imgWrapper}>
+          <Image
+            source={{ uri: dish.image_url || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300' }}
+            style={styles.img}
           />
+          <TouchableOpacity style={styles.heartBtn} onPress={toggleFav} activeOpacity={0.8}>
+            <Ionicons
+              name={isFav ? 'heart' : 'heart-outline'}
+              size={16}
+              color={isFav ? COLORS.error : COLORS.surface}
+            />
+          </TouchableOpacity>
         </View>
 
-        {/* Floating Action Button */}
+        {/* Add / Counter button */}
         {showAddButton && (
-          <View style={styles.addButtonContainer}>
+          <View style={styles.ctaContainer}>
             {distanceInfo.isTooFar ? (
-               <View style={styles.disabledBtn}>
-                 <Text style={styles.disabledText}>Too Far</Text>
-               </View>
+              <View style={styles.disabledBtn}>
+                <Ionicons name="location-outline" size={12} color={COLORS.gray} />
+                <Text style={styles.disabledText}>Too Far</Text>
+              </View>
             ) : quantity === 0 ? (
-              <TouchableOpacity 
-                activeOpacity={0.8} 
-                onPress={handleAdd} 
-                style={styles.addButton}
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={handleAdd}
+                style={styles.addBtn}
               >
-                {/* 👇 OBSIDIAN Text Color */}
-                <Text style={styles.addButtonText}>ADD</Text>
-                <View style={styles.plusIconAbsolute}>
-                  <Ionicons name="add" size={12} color={COLORS.obsidian} />
-                </View>
+                <Text style={styles.addBtnText}>ADD</Text>
+                <Ionicons name="add" size={14} color={COLORS.primary} />
               </TouchableOpacity>
             ) : (
-              // 👇 OBSIDIAN Background Color
-              <View style={[styles.counterContainer, { backgroundColor: COLORS.obsidian }]}>
-                <TouchableOpacity onPress={handleRemove} style={styles.counterAction}>
-                  <Ionicons name="remove" size={18} color="white" />
+              <View style={styles.counter}>
+                <TouchableOpacity onPress={handleRemove} style={styles.counterBtn}>
+                  <Ionicons name="remove" size={16} color={COLORS.surface} />
                 </TouchableOpacity>
-                <Text style={styles.counterText}>{quantity}</Text>
-                <TouchableOpacity onPress={handleAdd} style={styles.counterAction}>
-                  <Ionicons name="add" size={18} color="white" />
+                <Text style={styles.counterNum}>{quantity}</Text>
+                <TouchableOpacity onPress={handleAdd} style={styles.counterBtn}>
+                  <Ionicons name="add" size={16} color={COLORS.surface} />
                 </TouchableOpacity>
               </View>
             )}
           </View>
         )}
       </View>
-
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  cardContainer: {
+  card: {
     flexDirection: 'row',
     backgroundColor: COLORS.surface,
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 16,
-    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.light,
     shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
+    shadowOpacity: 0.07,
     shadowRadius: 12,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: COLORS.lightGray,
+    elevation: 4,
   },
-  
-  // Left Column
-  infoColumn: {
+
+  // ── Left column ────────────────────────
+  infoCol: {
     flex: 1,
-    paddingRight: 12,
+    paddingRight: 14,
   },
-  iconRow: {
+  tagRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 6,
+    gap: 6,
   },
   vegBox: {
     width: 14,
@@ -216,161 +226,187 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
   },
-  tagText: {
-    fontSize: 10,
-    fontWeight: '700',
-    marginLeft: 6,
-    letterSpacing: 0.5,
+  tagLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.4,
   },
-  dishName: {
+  bestsellerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primaryFaint,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
+    gap: 2,
+  },
+  bestsellerText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: COLORS.primary,
+    letterSpacing: 0.3,
+  },
+  name: {
     fontSize: 16,
     fontWeight: '800',
     color: COLORS.obsidian,
-    marginBottom: 4,
-    lineHeight: 20,
+    lineHeight: 22,
+    letterSpacing: -0.2,
+    marginBottom: 5,
   },
-  ratingBadge: {
+  ratingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
-  starsRow: {
-    flexDirection: 'row',
-    marginRight: 4,
+  ratingNum: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.dark,
+    marginLeft: 3,
   },
   ratingCount: {
     fontSize: 11,
-    color: COLORS.gray,
+    color: COLORS.medium,
     fontWeight: '500',
   },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   price: {
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 18,
+    fontWeight: '900',
     color: COLORS.obsidian,
+    letterSpacing: -0.5,
   },
   oldPrice: {
     fontSize: 12,
     color: COLORS.gray,
     textDecorationLine: 'line-through',
     marginLeft: 6,
+    fontWeight: '500',
   },
-  description: {
+  desc: {
     fontSize: 12,
-    color: COLORS.gray,
-    lineHeight: 16,
-    marginBottom: 12,
+    color: COLORS.medium,
+    lineHeight: 17,
+    marginBottom: 10,
+    fontWeight: '400',
   },
-  metaContainer: {
+  metaRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   metaPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.lightGray,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    backgroundColor: COLORS.border,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    gap: 3,
   },
   metaText: {
     fontSize: 10,
-    color: COLORS.gray,
+    color: COLORS.medium,
     fontWeight: '600',
-    marginLeft: 2,
   },
 
-  // Right Column
-  imageColumn: {
-    width: 120,
+  // ── Right column ───────────────────────
+  imageCol: {
+    width: 118,
     alignItems: 'center',
   },
-  imageWrapper: {
-    width: 120,
-    height: 110,
-    borderRadius: 12,
+  imgWrapper: {
+    width: 118,
+    height: 112,
+    borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: COLORS.lightGray,
+    backgroundColor: COLORS.border,
+    position: 'relative',
   },
-  dishImage: {
+  img: {
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
   },
-  
-  // Button Styles
-  addButtonContainer: {
-    marginTop: -18,
+  heartBtn: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.38)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // ── ADD / Counter ──────────────────────
+  ctaContainer: {
+    marginTop: -16,
     zIndex: 10,
     shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
     elevation: 6,
   },
-  addButton: {
-    backgroundColor: COLORS.surface,
-    paddingVertical: 8,
-    paddingHorizontal: 28,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  addButtonText: {
-    color: COLORS.obsidian, // 👈 Updated to Obsidian
-    fontWeight: '900',
-    fontSize: 14,
-  },
-  plusIconAbsolute: {
-    position: 'absolute',
-    top: 2,
-    right: 4,
-  },
-  
-  // Counter Styles
-  counterContainer: {
+  addBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 8,
+    justifyContent: 'center',
+    backgroundColor: COLORS.surface,
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+    gap: 3,
+  },
+  addBtnText: {
+    color: COLORS.primary,
+    fontWeight: '900',
+    fontSize: 13,
+    letterSpacing: 0.3,
+  },
+  counter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary,
+    borderRadius: 10,
     height: 36,
     paddingHorizontal: 4,
-    // Background color set inline in JSX to use COLORS.obsidian
   },
-  counterAction: {
-    width: 30,
+  counterBtn: {
+    width: 28,
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  counterText: {
-    color: 'white',
+  counterNum: {
+    color: COLORS.surface,
     fontWeight: '800',
     fontSize: 14,
-    marginHorizontal: 4,
-    minWidth: 16,
+    minWidth: 18,
     textAlign: 'center',
   },
-  
-  // Disabled State
   disabledBtn: {
-    backgroundColor: COLORS.lightGray,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.border,
     paddingVertical: 8,
-    paddingHorizontal: 20,
-    borderRadius: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.light,
+    gap: 4,
   },
   disabledText: {
     color: COLORS.gray,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
   },
 });

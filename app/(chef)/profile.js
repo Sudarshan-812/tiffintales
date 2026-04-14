@@ -7,43 +7,20 @@ import {
   ScrollView,
   Alert,
   Switch,
-  StatusBar,
-  Dimensions
 } from 'react-native';
 
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { StatusBar } from 'expo-status-bar';
 
 import { supabase } from '../../lib/supabase';
 import { getCurrentLocation } from '../../lib/location';
+import { useCart } from '../../lib/store';
+import { COLORS, SHADOW, RADIUS } from '../../lib/theme';
 
-const COLORS = {
-  background: '#F8FAFC',
-  surface: '#FFFFFF',
-  obsidian: '#0F172A',
-  primary: '#7E22CE',
-  primaryLight: '#F5F3FF',
-  text: '#1E293B',
-  subtext: '#64748B',
-  border: '#E2E8F0',
-  red: '#EF4444',
-  gold: '#F59E0B',
-  blue: '#3B82F6',
-  green: '#10B981',
-  switchTrackFalse: '#CBD5E1',
-  switchThumb: '#FFFFFF',
-  chefBadgeBg: '#FFFBEB',
-  chefBadgeBorder: '#FEF3C7',
-  userBadgeBg: '#F5F3FF',
-  userBadgeBorder: '#E9D5FF',
-  logoutBg: '#FFF1F2',
-  logoutBorder: '#FFE4E6',
-  shadow: '#000000',
-  menuItemBg1: '#FFFBEB',
-  menuItemBg2: '#EFF6FF',
-};
+// ─── Menu Item Row ─────────────────────────────────────────────────────────────
 
 const MenuItem = ({ icon, color, bg, label, subtext, onPress, hasSwitch, isDestructive, switchValue, onSwitchChange }) => (
   <TouchableOpacity
@@ -56,56 +33,58 @@ const MenuItem = ({ icon, color, bg, label, subtext, onPress, hasSwitch, isDestr
       <Ionicons name={icon} size={20} color={color} />
     </View>
     <View style={styles.menuTextContainer}>
-      <Text style={[styles.menuLabel, isDestructive && { color: COLORS.red }]}>{label}</Text>
-      {subtext && <Text style={styles.menuSubtext}>{subtext}</Text>}
+      <Text style={[styles.menuLabel, isDestructive && { color: COLORS.error }]}>{label}</Text>
+      {subtext ? <Text style={styles.menuSubtext}>{subtext}</Text> : null}
     </View>
     {hasSwitch ? (
       <Switch
         value={switchValue}
         onValueChange={onSwitchChange}
-        trackColor={{ false: COLORS.switchTrackFalse, true: COLORS.primary }}
-        thumbColor={COLORS.switchThumb}
+        trackColor={{ false: COLORS.muted, true: COLORS.primary }}
+        thumbColor="#FFFFFF"
       />
     ) : (
-      <Ionicons name="chevron-forward" size={16} color={COLORS.subtext} />
+      <Ionicons name="chevron-forward" size={16} color={COLORS.medium} />
     )}
   </TouchableOpacity>
 );
 
-export default function ProfileScreen() {
+// ─── Screen ───────────────────────────────────────────────────────────────────
+
+export default function ChefProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  
-  const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [notifications, setNotifications] = useState(true);
+  const { signOut } = useCart();
 
-  useEffect(() => {
-    getProfile();
-  }, []);
+  const [profile,        setProfile]        = useState(null);
+  const [orderCount,     setOrderCount]     = useState(0);
+  const [loading,        setLoading]        = useState(false);
+  const [notifications,  setNotifications]  = useState(true);
+
+  useEffect(() => { getProfile(); }, []);
 
   const getProfile = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
+      const [profileRes, ordersRes] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', user.id).single(),
+        supabase.from('orders').select('id', { count: 'exact', head: true }).eq('chef_id', user.id),
+      ]);
 
-      if (error && error.code !== 'PGRST116') throw error;
+      if (profileRes.error && profileRes.error.code !== 'PGRST116') throw profileRes.error;
 
       setProfile({
-        ...(data || {}),
+        ...(profileRes.data || {}),
         email: user.email,
-        full_name: data?.full_name || 'User',
-        role: data?.role || 'user',
-        joined: new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+        full_name: profileRes.data?.full_name || 'Chef',
+        role: profileRes.data?.role || 'chef',
+        joined: new Date(user.created_at).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }),
       });
-    } catch (error) {
-      Alert.alert("Error", "Could not load profile.");
+      setOrderCount(ordersRes.count || 0);
+    } catch {
+      Alert.alert('Error', 'Could not load profile.');
     }
   };
 
@@ -113,7 +92,7 @@ export default function ProfileScreen() {
     setLoading(true);
     try {
       const coords = await getCurrentLocation();
-      if (!coords) throw new Error("Location permission denied.");
+      if (!coords) throw new Error('Location permission denied.');
 
       const { error } = await supabase
         .from('profiles')
@@ -121,86 +100,107 @@ export default function ProfileScreen() {
         .eq('id', profile.id);
 
       if (error) throw error;
-      Alert.alert("Success 📍", "Kitchen coordinates updated!");
+      Alert.alert('Success', 'Kitchen coordinates updated!');
       getProfile();
     } catch (error) {
-      Alert.alert("Error", error.message);
+      Alert.alert('Error', error.message);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleLogout = () => {
+    Alert.alert('Sign Out', 'Exit your chef account?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign Out', style: 'destructive',
+        onPress: async () => { await signOut(); router.replace('/login'); },
+      },
+    ]);
+  };
+
+  const initials = profile?.full_name?.[0]?.toUpperCase() ?? '?';
+
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+    <View style={[styles.screen, { paddingTop: insets.top }]}>
+      <StatusBar style="dark" />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        
-        {/* --- HERO HEADER --- */}
-        <LinearGradient 
-          colors={[COLORS.surface, COLORS.background]} 
-          style={[styles.hero, { paddingTop: insets.top + 20 }]}
+
+        {/* ── Hero ── */}
+        <LinearGradient
+          colors={[COLORS.primaryFaint, COLORS.background]}
+          style={styles.hero}
         >
-          <View style={styles.avatarWrapper}>
-            <View style={styles.avatar}>
-               <Text style={styles.avatarText}>{profile?.full_name?.[0]?.toUpperCase()}</Text>
+          {/* Header row */}
+          <View style={styles.heroHeader}>
+            <View>
+              <Text style={styles.heroTag}>MY ACCOUNT</Text>
+              <Text style={styles.heroTitle}>Account</Text>
             </View>
-            <TouchableOpacity style={styles.editBadge}>
-                <Ionicons name="camera" size={14} color={COLORS.surface} />
-            </TouchableOpacity>
+          </View>
+
+          {/* Avatar */}
+          <View style={styles.avatarRing}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{initials}</Text>
+            </View>
+            <View style={styles.editBadge}>
+              <Ionicons name="camera" size={13} color="#FFF" />
+            </View>
           </View>
 
           <Text style={styles.userName}>{profile?.full_name}</Text>
           <Text style={styles.userEmail}>{profile?.email}</Text>
-          
-          <View style={[styles.roleBadge, profile?.role === 'chef' ? styles.chefTheme : styles.userTheme]}>
-             <Ionicons 
-                name={profile?.role === 'chef' ? "restaurant" : "person"} 
-                size={12} 
-                color={profile?.role === 'chef' ? COLORS.gold : COLORS.primary} 
-             />
-             <Text style={[styles.roleText, { color: profile?.role === 'chef' ? COLORS.gold : COLORS.primary }]}>
-                {profile?.role === 'chef' ? 'Professional Chef' : 'Verified Member'}
-             </Text>
+
+          <View style={styles.chefBadge}>
+            <Ionicons name="restaurant" size={11} color={COLORS.primary} />
+            <Text style={styles.chefBadgeText}>Professional Chef</Text>
           </View>
         </LinearGradient>
 
-        {/* --- DASHBOARD STATS --- */}
-        <View style={styles.statsRow}>
+        {/* ── Stats card ── */}
+        <View style={styles.statsCard}>
           <View style={styles.statBox}>
-             <Text style={styles.statValue}>{profile?.role === 'chef' ? '24' : '12'}</Text>
-             <Text style={styles.statLabel}>Total Orders</Text>
+            <Text style={styles.statValue}>{orderCount}</Text>
+            <Text style={styles.statLabel}>Total Orders</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statBox}>
-             <Text style={styles.statValue}>{profile?.joined || '...'}</Text>
-             <Text style={styles.statLabel}>Joined Date</Text>
+            <Text style={styles.statValue}>
+              {orderCount > 0 ? `₹${(orderCount * 80).toLocaleString()}` : '₹0'}
+            </Text>
+            <Text style={styles.statLabel}>Est. Earned</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statBox}>
+            <Text style={styles.statValue}>{profile?.joined ?? '—'}</Text>
+            <Text style={styles.statLabel}>Joined</Text>
           </View>
         </View>
 
-        {/* --- KITCHEN/ACCOUNT SECTION --- */}
-        {profile?.role === 'chef' && (
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>KITCHEN LOGISTICS</Text>
-            <View style={styles.menuGroup}>
-              <MenuItem
-                icon="navigate-circle"
-                color={COLORS.gold}
-                bg={COLORS.menuItemBg1}
-                label={loading ? "Syncing GPS..." : "Update Kitchen Location"}
-                subtext={profile?.latitude ? "Location verified ✅" : "Set your GPS coordinates"}
-                onPress={updateLocation}
-              />
-            </View>
+        {/* ── Kitchen Logistics ── */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>KITCHEN LOGISTICS</Text>
+          <View style={styles.menuGroup}>
+            <MenuItem
+              icon="navigate-circle"
+              color="#F59E0B"
+              bg="#FFFBEB"
+              label={loading ? 'Syncing GPS…' : 'Update Kitchen Location'}
+              subtext={profile?.latitude ? 'Location verified ✓' : 'Set your GPS coordinates'}
+              onPress={updateLocation}
+            />
           </View>
-        )}
+        </View>
 
+        {/* ── Preferences ── */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>PREFERENCES</Text>
           <View style={styles.menuGroup}>
             <MenuItem
               icon="receipt"
-              color={COLORS.blue}
-              bg={COLORS.menuItemBg2}
+              color="#3B82F6"
+              bg="#EFF6FF"
               label="Order History"
               onPress={() => router.push('/(tabs)/orders')}
             />
@@ -217,15 +217,14 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* --- LOGOUT --- */}
+        {/* ── Sign Out ── */}
         <View style={styles.section}>
-           <TouchableOpacity 
-              style={styles.logoutBtn} 
-              onPress={() => supabase.auth.signOut().then(() => router.replace('/welcome'))}
-           >
-              <Ionicons name="log-out-outline" size={20} color={COLORS.red} />
-              <Text style={styles.logoutBtnText}>Sign Out</Text>
-           </TouchableOpacity>
+          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+            <View style={styles.logoutIconBox}>
+              <Ionicons name="log-out-outline" size={18} color={COLORS.error} />
+            </View>
+            <Text style={styles.logoutText}>Sign Out</Text>
+          </TouchableOpacity>
         </View>
 
       </ScrollView>
@@ -234,22 +233,41 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  scrollContent: {
-    paddingBottom: 100,
-  },
+  screen: { flex: 1, backgroundColor: COLORS.background },
+  scrollContent: { paddingBottom: 110 },
+
+  // ── Hero ─────────────────────────────────────────────
   hero: {
     alignItems: 'center',
-    paddingBottom: 30,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
+    paddingBottom: 32,
+    paddingHorizontal: 20,
   },
-  avatarWrapper: {
+  heroHeader: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    marginBottom: 12,
+  },
+  heroTag: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.primary,
+    letterSpacing: 1.5,
+    marginBottom: 2,
+  },
+  heroTitle: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: COLORS.obsidian,
+    letterSpacing: -0.5,
+  },
+  avatarRing: {
     position: 'relative',
-    marginBottom: 15,
+    marginBottom: 14,
+    width: 96,
+    height: 96,
   },
   avatar: {
     width: 96,
@@ -258,160 +276,129 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 10,
+    borderWidth: 3,
+    borderColor: COLORS.primaryLight,
     shadowColor: COLORS.primary,
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
+    shadowOpacity: 0.35,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 14,
+    elevation: 10,
   },
-  avatarText: {
-    fontSize: 34,
-    fontWeight: '800',
-    color: COLORS.surface,
-  },
+  avatarText: { fontSize: 34, fontWeight: '800', color: '#FFF' },
   editBadge: {
     position: 'absolute',
     bottom: 0,
     right: 0,
     backgroundColor: COLORS.obsidian,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 3,
-    borderColor: COLORS.surface,
+    borderWidth: 2.5,
+    borderColor: '#FFF',
   },
   userName: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '800',
     color: COLORS.obsidian,
     marginBottom: 4,
   },
   userEmail: {
-    fontSize: 14,
-    color: COLORS.subtext,
-    marginBottom: 15,
+    fontSize: 13,
+    color: COLORS.medium,
+    marginBottom: 14,
   },
-  roleBadge: {
+  chefBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: COLORS.primaryLight,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 20,
-  },
-  chefTheme: {
-    backgroundColor: COLORS.chefBadgeBg,
+    borderRadius: RADIUS.full,
     borderWidth: 1,
-    borderColor: COLORS.chefBadgeBorder,
+    borderColor: COLORS.primaryFaint,
+    gap: 5,
   },
-  userTheme: {
-    backgroundColor: COLORS.userBadgeBg,
-    borderWidth: 1,
-    borderColor: COLORS.userBadgeBorder,
-  },
-  roleText: {
+  chefBadgeText: {
     fontSize: 11,
-    fontWeight: '700',
-    marginLeft: 6,
+    fontWeight: '800',
+    color: COLORS.primary,
+    letterSpacing: 0.3,
     textTransform: 'uppercase',
   },
-  statsRow: {
+
+  // ── Stats ────────────────────────────────────────────
+  statsCard: {
     flexDirection: 'row',
     backgroundColor: COLORS.surface,
-    marginHorizontal: 25,
-    marginTop: -25,
-    borderRadius: 24,
+    marginHorizontal: 20,
+    marginTop: -16,
+    borderRadius: RADIUS.xl,
     paddingVertical: 20,
-    elevation: 5,
-    shadowColor: COLORS.shadow,
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.light,
+    ...SHADOW.lg,
   },
-  statBox: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.text,
-  },
-  statLabel: {
-    fontSize: 11,
-    color: COLORS.subtext,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  statDivider: {
-    width: 1,
-    height: '60%',
-    backgroundColor: COLORS.border,
-    alignSelf: 'center',
-  },
-  section: {
-    marginTop: 30,
-    paddingHorizontal: 20,
-  },
+  statBox: { flex: 1, alignItems: 'center' },
+  statValue: { fontSize: 17, fontWeight: '800', color: COLORS.obsidian },
+  statLabel: { fontSize: 10, color: COLORS.medium, fontWeight: '600', marginTop: 3, letterSpacing: 0.3 },
+  statDivider: { width: 1, height: '55%', backgroundColor: COLORS.light, alignSelf: 'center' },
+
+  // ── Sections ─────────────────────────────────────────
+  section: { marginTop: 24, paddingHorizontal: 20 },
   sectionLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
-    color: COLORS.subtext,
-    marginLeft: 10,
+    color: COLORS.medium,
+    marginLeft: 6,
     marginBottom: 10,
-    letterSpacing: 1.2,
+    letterSpacing: 1.4,
   },
   menuGroup: {
     backgroundColor: COLORS.surface,
-    borderRadius: 24,
+    borderRadius: RADIUS.xl,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.light,
+    ...SHADOW.sm,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
   },
-  menuTextContainer: {
-    flex: 1,
-    marginLeft: 15,
-  },
-  menuLabel: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  menuSubtext: {
-    fontSize: 12,
-    color: COLORS.subtext,
-    marginTop: 2,
-  },
+  menuTextContainer: { flex: 1, marginLeft: 14 },
+  menuLabel: { fontSize: 15, fontWeight: '700', color: COLORS.obsidian },
+  menuSubtext: { fontSize: 12, color: COLORS.medium, marginTop: 2 },
   iconBox: {
     width: 40,
     height: 40,
-    borderRadius: 12,
+    borderRadius: RADIUS.md,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.border,
-    marginLeft: 70,
-  },
+  divider: { height: 1, backgroundColor: COLORS.border, marginLeft: 70 },
+
+  // ── Logout ───────────────────────────────────────────
   logoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.logoutBg,
+    backgroundColor: COLORS.errorLight,
     padding: 18,
-    borderRadius: 24,
+    borderRadius: RADIUS.xl,
     borderWidth: 1,
-    borderColor: COLORS.logoutBorder,
+    borderColor: '#FECACA',
+    gap: 10,
   },
-  logoutBtnText: {
-    color: COLORS.red,
-    fontWeight: '800',
-    fontSize: 16,
-    marginLeft: 10,
+  logoutIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: RADIUS.md,
+    backgroundColor: '#FFF',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
+  logoutText: { color: COLORS.error, fontWeight: '800', fontSize: 15 },
 });

@@ -1,62 +1,43 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-  StyleSheet,
-  Animated,
-  LayoutAnimation,
-  Platform,
-  UIManager
+  View, Text, TouchableOpacity, Alert,
+  ActivityIndicator, StyleSheet, Animated, LayoutAnimation,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
+import { COLORS, SHADOW, RADIUS } from '../lib/theme';
+import AnimatedIcon from './AnimatedIcon';
 
-// Enable LayoutAnimation on Android
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
-// Premium Theme Palette
-const COLORS = {
-  background: '#FFFFFF',
-  obsidian: '#111827',
-  gray: '#6B7280',
-  lightGray: '#F3F4F6',
-  primary: '#7E22CE',   // Purple
-  success: '#10B981',   // Green
-  warning: '#F59E0B',   // Gold
-  danger: '#EF4444',    // Red
-  cooking: '#F97316',   // Orange
-  border: '#E5E7EB',
-};
-
-// Helper Components
+// ─── Animated Status Badge ─────────────────────────────────────────────────────
 
 const StatusBadge = ({ status }) => {
-  let config = { color: COLORS.gray, bg: COLORS.lightGray, label: status, icon: 'help' };
-
-  switch (status) {
-    case 'pending':
-      config = { color: COLORS.warning, bg: '#FEF3C7', label: 'NEW', icon: 'hourglass' };
-      break;
-    case 'cooking':
-      config = { color: COLORS.cooking, bg: '#FFEDD5', label: 'COOKING', icon: 'flame' };
-      break;
-    case 'ready':
-      config = { color: COLORS.success, bg: '#D1FAE5', label: 'READY', icon: 'checkmark-circle' };
-      break;
-  }
+  const CFG = {
+    pending:  { color: COLORS.warning,  bg: COLORS.warningLight,  label: 'NEW',     name: 'hourglass',          anim: 'spin'    },
+    cooking:  { color: COLORS.primary,  bg: COLORS.primaryLight,  label: 'COOKING', name: 'flame',              anim: 'pulse'   },
+    ready:    { color: COLORS.success,  bg: COLORS.successLight,  label: 'READY',   name: 'checkmark-circle',   anim: 'tada'    },
+    rejected: { color: COLORS.error,    bg: COLORS.errorLight,    label: 'REJECTED',name: 'close-circle',       anim: 'none'    },
+    delivered:{ color: COLORS.dark,     bg: COLORS.border,        label: 'DONE',    name: 'bag-check',          anim: 'none'    },
+  };
+  const cfg = CFG[status] || CFG.pending;
 
   return (
-    <View style={[styles.statusBadge, { backgroundColor: config.bg }]}>
-      <Ionicons name={config.icon} size={12} color={config.color} style={{ marginRight: 4 }} />
-      <Text style={[styles.statusText, { color: config.color }]}>{config.label}</Text>
+    <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
+      <AnimatedIcon
+        name={cfg.name}
+        size={20}
+        iconSize={11}
+        color={cfg.color}
+        bg="transparent"
+        borderColor="transparent"
+        animation={cfg.anim}
+        radius={10}
+      />
+      <Text style={[styles.statusText, { color: cfg.color }]}>{cfg.label}</Text>
     </View>
   );
 };
+
+// ─── Order Item Row ────────────────────────────────────────────────────────────
 
 const OrderItem = ({ item }) => (
   <View style={styles.itemRow}>
@@ -70,21 +51,18 @@ const OrderItem = ({ item }) => (
   </View>
 );
 
-
-// Main Component
-
+// ─── Main Component ────────────────────────────────────────────────────────────
 
 export default function OrderCard({ order, onUpdate }) {
   const [loading, setLoading] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  // Pulse Animation for "Cooking" State buttons
   useEffect(() => {
     if (order.status === 'cooking') {
       Animated.loop(
         Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.05, duration: 800, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1.03, duration: 900, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1,    duration: 900, useNativeDriver: true }),
         ])
       ).start();
     } else {
@@ -96,11 +74,7 @@ export default function OrderCard({ order, onUpdate }) {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from('orders')
-        .update({ status: newStatus })
-        .eq('id', order.id);
-
+      const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', order.id);
       if (error) throw error;
       await onUpdate();
     } catch (error) {
@@ -112,16 +86,34 @@ export default function OrderCard({ order, onUpdate }) {
 
   return (
     <View style={styles.card}>
-      
-      {/* ─── 1. Header ─── */}
+
+      {/* ── Header ── */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.orderId}>Order #{order.id.toString().slice(-4)}</Text>
-          <Text style={styles.timestamp}>
-            {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </Text>
+        <View style={styles.headerLeft}>
+          {/* Large animated status icon */}
+          {order.status === 'pending' && (
+            <AnimatedIcon name="hourglass" size={46} iconSize={22} color={COLORS.warning} bg={COLORS.warningLight} animation="spin" glow radius={14} />
+          )}
+          {order.status === 'cooking' && (
+            <AnimatedIcon name="flame" size={46} iconSize={22} color={COLORS.primary} bg={COLORS.primaryLight} animation="pulse" glow radius={14} />
+          )}
+          {order.status === 'ready' && (
+            <AnimatedIcon name="checkmark-circle" size={46} iconSize={22} color={COLORS.success} bg={COLORS.successLight} animation="bounce" glow radius={14} />
+          )}
+          {order.status === 'rejected' && (
+            <AnimatedIcon name="close-circle" size={46} iconSize={22} color={COLORS.error} bg={COLORS.errorLight} animation="none" radius={14} />
+          )}
+          {order.status === 'delivered' && (
+            <AnimatedIcon name="bag-check" size={46} iconSize={22} color={COLORS.dark} bg={COLORS.border} animation="none" radius={14} />
+          )}
+          <View style={styles.headerMeta}>
+            <Text style={styles.orderId}>Order #{order.id.toString().slice(-4)}</Text>
+            <Text style={styles.timestamp}>
+              {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+          </View>
         </View>
-        <View style={{ alignItems: 'flex-end' }}>
+        <View style={styles.headerRight}>
           <Text style={styles.totalPrice}>₹{order.total_price}</Text>
           <StatusBadge status={order.status} />
         </View>
@@ -129,267 +121,234 @@ export default function OrderCard({ order, onUpdate }) {
 
       <View style={styles.divider} />
 
-      {/* ─── 2. Items List ─── */}
+      {/* ── Items ── */}
       <View style={styles.itemsContainer}>
         {order.order_items.map((item, index) => (
           <OrderItem key={index} item={item} />
         ))}
-        {order.instruction && (
-          <View style={styles.noteContainer}>
-            <Ionicons name="reader-outline" size={14} color={COLORS.gray} />
+        {order.instruction ? (
+          <View style={styles.noteBox}>
+            <Ionicons name="chatbubble-ellipses-outline" size={13} color={COLORS.medium} />
             <Text style={styles.noteText}>"{order.instruction}"</Text>
           </View>
-        )}
+        ) : null}
       </View>
 
-      {/* ─── 3. Action Footer ─── */}
+      {/* ── Action Footer ── */}
       <View style={styles.footer}>
         {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color={COLORS.obsidian} />
+          <View style={styles.loaderBox}>
+            <ActivityIndicator size="small" color={COLORS.primary} />
           </View>
         ) : (
           <>
-            {/* PENDING ACTIONS */}
             {order.status === 'pending' && (
               <View style={styles.actionRow}>
-                <TouchableOpacity 
-                  onPress={() => handleStatusUpdate('rejected')} 
+                <TouchableOpacity
+                  onPress={() => handleStatusUpdate('rejected')}
                   style={styles.rejectBtn}
                 >
+                  <Ionicons name="close" size={15} color={COLORS.error} />
                   <Text style={styles.rejectText}>Reject</Text>
                 </TouchableOpacity>
-
-                <TouchableOpacity 
-                  onPress={() => handleStatusUpdate('cooking')} 
+                <TouchableOpacity
+                  onPress={() => handleStatusUpdate('cooking')}
                   style={styles.acceptBtn}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.acceptText}>Accept Order</Text>
-                  <Ionicons name="arrow-forward" size={16} color="white" />
+                  <Ionicons name="flame" size={16} color="#FFF" />
+                  <Text style={styles.acceptText}>Accept & Cook</Text>
                 </TouchableOpacity>
               </View>
             )}
 
-            {/* COOKING ACTION (Pulsing) */}
             {order.status === 'cooking' && (
               <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-                <TouchableOpacity 
-                  onPress={() => handleStatusUpdate('ready')} 
+                <TouchableOpacity
+                  onPress={() => handleStatusUpdate('ready')}
                   style={styles.markReadyBtn}
-                  activeOpacity={0.8}
+                  activeOpacity={0.85}
                 >
-                  <Ionicons name="checkmark-done-circle" size={20} color="white" style={{ marginRight: 8 }} />
+                  <AnimatedIcon
+                    name="checkmark-done-circle"
+                    size={30}
+                    iconSize={16}
+                    color="#FFF"
+                    bg="rgba(255,255,255,0.2)"
+                    borderColor="rgba(255,255,255,0.3)"
+                    animation="none"
+                    radius={9}
+                  />
                   <Text style={styles.markReadyText}>Mark as Ready</Text>
                 </TouchableOpacity>
               </Animated.View>
             )}
 
-            {/* READY STATUS */}
             {order.status === 'ready' && (
               <View style={styles.readyBanner}>
-                <Ionicons name="bicycle" size={18} color={COLORS.success} />
+                <AnimatedIcon
+                  name="bicycle"
+                  size={36}
+                  iconSize={18}
+                  color={COLORS.success}
+                  bg={COLORS.successLight}
+                  animation="bounce"
+                  radius={11}
+                />
                 <Text style={styles.readyBannerText}>Waiting for Pickup</Text>
               </View>
             )}
           </>
         )}
       </View>
+
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: COLORS.background,
-    borderRadius: 16,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.xl,
     marginBottom: 16,
     marginHorizontal: 16,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    // Modern Shadow
-    shadowColor: COLORS.obsidian,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 3,
+    borderColor: COLORS.light,
+    ...SHADOW.md,
   },
-  
-  // Header
+
+  // ── Header ─────────────────────────────────────────
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     padding: 16,
   },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  headerMeta: {},
   orderId: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: COLORS.obsidian,
-    letterSpacing: 0.5,
+    letterSpacing: 0.2,
   },
   timestamp: {
-    fontSize: 12,
-    color: COLORS.gray,
+    fontSize: 11,
+    color: COLORS.medium,
     fontWeight: '500',
     marginTop: 2,
   },
+  headerRight: { alignItems: 'flex-end', gap: 6 },
   totalPrice: {
     fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.primary,
-    marginBottom: 4,
+    fontWeight: '900',
+    color: COLORS.obsidian,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingVertical: 5,
+    borderRadius: RADIUS.sm,
+    gap: 4,
   },
   statusText: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.6,
   },
 
   divider: {
     height: 1,
-    backgroundColor: COLORS.lightGray,
+    backgroundColor: COLORS.border,
     marginHorizontal: 16,
   },
 
-  // Items
-  itemsContainer: {
-    padding: 16,
-  },
-  itemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
+  // ── Items ──────────────────────────────────────────
+  itemsContainer: { padding: 16 },
+  itemRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   qtyBox: {
-    backgroundColor: COLORS.lightGray,
-    width: 24,
-    height: 24,
-    borderRadius: 6,
+    backgroundColor: COLORS.primaryLight,
+    width: 24, height: 24,
+    borderRadius: 7,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
   },
-  qtyText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.obsidian,
-  },
-  itemName: {
-    flex: 1,
-    fontSize: 14,
-    color: COLORS.obsidian,
-    fontWeight: '500',
-  },
-  itemPrice: {
-    fontSize: 14,
-    color: COLORS.gray,
-    fontWeight: '500',
-  },
-  noteContainer: {
+  qtyText:   { fontSize: 12, fontWeight: '800', color: COLORS.primary },
+  itemName:  { flex: 1, fontSize: 14, color: COLORS.obsidian, fontWeight: '500' },
+  itemPrice: { fontSize: 14, color: COLORS.medium, fontWeight: '600' },
+  noteBox: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 8,
-    backgroundColor: '#F9FAFB',
-    padding: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#F3F4F6'
-  },
-  noteText: {
-    fontSize: 12,
-    color: COLORS.gray,
-    fontStyle: 'italic',
-    marginLeft: 6
-  },
-
-  // Footer
-  footer: {
-    padding: 16,
-    paddingTop: 0,
-  },
-  loadingContainer: {
-    height: 48,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  
-  // Buttons
-  actionRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  rejectBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
+    backgroundColor: COLORS.inputBg,
+    padding: 10,
+    borderRadius: RADIUS.md,
     borderWidth: 1,
     borderColor: COLORS.border,
-    backgroundColor: '#FFF',
+    gap: 6,
   },
-  rejectText: {
-    color: COLORS.danger,
-    fontWeight: '700',
-    fontSize: 14,
+  noteText: { fontSize: 12, color: COLORS.medium, fontStyle: 'italic', flex: 1 },
+
+  // ── Footer ─────────────────────────────────────────
+  footer: { padding: 16, paddingTop: 0 },
+  loaderBox: { height: 50, justifyContent: 'center', alignItems: 'center' },
+
+  // ── Buttons ────────────────────────────────────────
+  actionRow: { flexDirection: 'row', gap: 10 },
+  rejectBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 13,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.errorLight,
+    backgroundColor: COLORS.errorLight,
+    gap: 5,
   },
+  rejectText: { color: COLORS.error, fontWeight: '700', fontSize: 14 },
   acceptBtn: {
     flex: 2,
-    backgroundColor: COLORS.obsidian,
-    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
+    backgroundColor: COLORS.obsidian,
+    borderRadius: RADIUS.md,
+    paddingVertical: 13,
     gap: 8,
     shadowColor: COLORS.obsidian,
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.25,
     shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+    elevation: 5,
   },
-  acceptText: {
-    color: 'white',
-    fontWeight: '700',
-    fontSize: 14,
-  },
+  acceptText: { color: '#FFF', fontWeight: '800', fontSize: 14 },
   markReadyBtn: {
-    backgroundColor: COLORS.cooking,
-    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
-    shadowColor: COLORS.cooking,
-    shadowOpacity: 0.3,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.md,
+    paddingVertical: 13,
+    gap: 10,
+    shadowColor: COLORS.primary,
+    shadowOpacity: 0.4,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 6,
   },
-  markReadyText: {
-    color: 'white',
-    fontWeight: '800',
-    fontSize: 15,
-  },
+  markReadyText: { color: '#FFF', fontWeight: '800', fontSize: 15 },
   readyBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#ECFDF5',
+    backgroundColor: COLORS.successLight,
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: RADIUS.md,
     borderWidth: 1,
-    borderColor: '#D1FAE5',
-    gap: 8,
+    borderColor: COLORS.success + '30',
+    gap: 10,
   },
-  readyBannerText: {
-    color: '#065F46',
-    fontWeight: '700',
-    fontSize: 14,
-  },
+  readyBannerText: { color: COLORS.success, fontWeight: '800', fontSize: 14 },
 });

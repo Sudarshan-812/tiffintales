@@ -23,11 +23,13 @@ export default function RootLayout() {
 
   // Mount the main application navigation
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="(chef)" />
       <Stack.Screen name="welcome" />
       <Stack.Screen name="login" />
+      <Stack.Screen name="cart" options={{ animation: 'slide_from_bottom' }} />
     </Stack>
   );
 }
